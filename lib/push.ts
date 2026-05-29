@@ -41,9 +41,9 @@ export async function sendPush(subscription: webpush.PushSubscription, payload: 
   } catch (err: any) {
     if (err.statusCode === 410) {
       // Subscription expired — remove it
-      for (const [key, sub] of subscriptions.entries()) {
+      Array.from(subscriptions.entries()).forEach(([key, sub]) => {
         if (sub.endpoint === subscription.endpoint) subscriptions.delete(key)
-      }
+      })
     }
     console.error('Push failed:', err.message)
   }
