@@ -1,7 +1,7 @@
 // app/api/photos/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getShiftLog, uploadAttachment, FIELDS } from '@/lib/airtable'
+import { getShiftLog, uploadAttachment } from '@/lib/airtable'
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,23 +10,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const form       = await req.formData()
-    const shiftLogId = form.get('shiftLogId') as string
-    const file       = form.get('file') as File
+    const { shiftLogId, base64, contentType, filename } = await req.json()
 
-    if (!shiftLogId || !file) {
-      return NextResponse.json({ error: 'Missing shiftLogId or file' }, { status: 400 })
+    if (!shiftLogId || !base64) {
+      return NextResponse.json({ error: 'Missing shiftLogId or base64' }, { status: 400 })
     }
 
-    // Upload directly to Airtable — automatically appends to existing attachments
-    await uploadAttachment(shiftLogId, FIELDS.LOG_END_PHOTO_URLS, file, file.name || 'photo.jpg')
+    const buffer = Buffer.from(base64, 'base64')
+    const blob = new Blob([buffer], { type: contentType || 'image/jpeg' })
 
-    // Fetch updated log to return current count and URLs
+    await uploadAttachment(shiftLogId, 'End Photo URLs', blob, filename || 'photo.jpg')
+
     const log = await getShiftLog(shiftLogId)
+    const photoCount = log.endPhotoAttachments?.length ?? 0
 
     return NextResponse.json({
       log,
-      photoCount:  log.endPhotoAttachments.length,
+      photoCount,
       updatedUrls: log.endPhotoUrls,
     })
   } catch (err: any) {

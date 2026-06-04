@@ -375,22 +375,24 @@ export async function updateIncident(id: string, fields: Record<string, any>) {
 
 // ─── ATTACHMENT UPLOAD ────────────────────────────────────────
 // Uploads a file directly to an Airtable multipleAttachments field.
+// Uses field NAME (not ID) so it works across base copies.
 // Airtable appends to existing attachments — no need to preserve IDs.
 export async function uploadAttachment(
   recordId: string,
-  fieldId: string,
+  fieldName: string,
   file: Blob,
   filename: string,
 ): Promise<any> {
   const baseId = process.env.AIRTABLE_BASE_ID
   const token  = process.env.AIRTABLE_TOKEN
 
-  // Convert Blob/File to base64
   const arrayBuffer = await file.arrayBuffer()
   const base64 = Buffer.from(arrayBuffer).toString('base64')
 
+  const encodedFieldName = encodeURIComponent(fieldName)
+
   const res = await fetch(
-    `https://api.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`,
+    `https://api.airtable.com/v0/${baseId}/${recordId}/${encodedFieldName}/uploadAttachment`,
     {
       method: 'POST',
       headers: {
@@ -406,8 +408,8 @@ export async function uploadAttachment(
   )
 
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Airtable upload error ${res.status}: ${err}`)
+    const errText = await res.text()
+    throw new Error(`Airtable upload error ${res.status}: ${errText}`)
   }
   return res.json()
 }

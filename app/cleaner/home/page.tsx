@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Badge, Card, Spinner, TabBar, StatusBar, SectionLabel } from '@/components/ui'
 import type { Tab } from '@/components/ui'
+import imageCompression from 'browser-image-compression'
 
 type ShiftState = 'loading' | 'no_shift' | 'menu_sent' | 'awaiting_photo' | 'active' | 'collecting_photos' | 'complete'
 
@@ -13,6 +14,21 @@ const TABS: Tab[] = [
   { id: 'history',  label: 'History',  icon: '🕐' },
   { id: 'profile',  label: 'Profile',  icon: '👤' },
 ]
+
+async function compressPhoto(file: File): Promise<File> {
+  try {
+    return await imageCompression(file, { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true })
+  } catch {
+    return file
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
 
 export default function CleanerHome() {
   const router = useRouter()
@@ -104,14 +120,27 @@ export default function CleanerHome() {
   async function handleSignInPhoto(file: File) {
     setUploading(true)
     try {
-      const form = new FormData()
-      form.append('shiftLogId', logId)
-      form.append('file', file, file.name || 'signin.jpg')
-      const res = await fetch('/api/checkin', { method: 'POST', body: form })
-      if (!res.ok) throw new Error('Upload failed')
+      const compressed = await compressPhoto(file)
+      const base64 = arrayBufferToBase64(await compressed.arrayBuffer())
+
+      const res = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sign_in_photo',
+          shiftLogId: logId,
+          base64,
+          contentType: file.type || 'image/jpeg',
+          filename: file.name || 'signin.jpg',
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Upload failed')
+      }
       setShiftState('active')
-    } catch {
-      setError('Photo upload failed. Try again.')
+    } catch (err: any) {
+      setError(err.message || 'Photo upload failed. Try again.')
     } finally {
       setUploading(false)
     }
@@ -141,18 +170,31 @@ export default function CleanerHome() {
       let count = photoCount
       let urls  = photoUrls
       for (const file of Array.from(files)) {
-        const form = new FormData()
-        form.append('shiftLogId', logId)
-        form.append('file', file, file.name || 'photo.jpg')
-        const res  = await fetch('/api/photos', { method: 'POST', body: form })
+        const compressed = await compressPhoto(file)
+        const base64 = arrayBufferToBase64(await compressed.arrayBuffer())
+
+        const res = await fetch('/api/photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shiftLogId: logId,
+            base64,
+            contentType: file.type || 'image/jpeg',
+            filename: file.name || 'photo.jpg',
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Upload failed')
+        }
         const data = await res.json()
-        urls  = data.updatedUrls
-        count = data.photoCount
+        urls  = data.updatedUrls || urls
+        count = data.photoCount || count + 1
       }
       setPhotoUrls(urls)
       setPhotoCount(count)
-    } catch {
-      setError('Some photos failed to upload. Try again.')
+    } catch (err: any) {
+      setError(err.message || 'Some photos failed to upload. Try again.')
     } finally {
       setUploading(false)
     }

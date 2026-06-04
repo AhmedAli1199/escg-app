@@ -5,7 +5,6 @@ import {
   createIncident, getAllIncidents, updateIncident, uploadAttachment,
   updateShiftLog, createShiftLog,
   getSydneyDateFormatted, getSydneyTime,
-  FIELDS,
 } from '@/lib/airtable'
 import { sendPushToManager, PUSH } from '@/lib/push'
 
@@ -27,17 +26,11 @@ export async function POST(req: NextRequest) {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const form        = await req.formData()
-    const cleanerId   = form.get('cleanerId')   as string
-    const shiftLogId  = form.get('shiftLogId')  as string
-    const siteName    = form.get('siteName')    as string
-    const description = form.get('description') as string
-    const currentState = form.get('currentState') as string
-    const file        = form.get('file') as File | null
+    const { cleanerId, shiftLogId, siteName, description, currentState, base64, contentType, filename } = await req.json()
 
     const date = getSydneyDateFormatted()
+    const time = getSydneyTime()
 
-    // Create incident record first (without photo)
     const incident = await createIncident({
       Cleaner:           cleanerId ? [cleanerId] : undefined,
       Site:              siteName     || '',
@@ -46,17 +39,17 @@ export async function POST(req: NextRequest) {
       'Manager Alerted': true,
     })
 
-    // Upload photo to the created incident record if provided
-    if (file && file.size > 0) {
-      await uploadAttachment(incident.id, FIELDS.INC_PHOTO, file, file.name || 'incident.jpg')
+    if (base64) {
+      const buffer = Buffer.from(base64, 'base64')
+      const blob = new Blob([buffer], { type: contentType || 'image/jpeg' })
+      await uploadAttachment(incident.id, 'Photo', blob, filename || 'incident.jpg')
     }
 
-    // Update or create shift log
     if (shiftLogId && currentState) {
       await updateShiftLog(shiftLogId, {
         'Cleaner State':  'Incident Open',
         'Previous State': currentState,
-        'Cleaner Notes':  `[${getSydneyTime()}] ${description}`,
+        'Cleaner Notes':  `[${time}] ${description}`,
       })
     } else {
       await createShiftLog({

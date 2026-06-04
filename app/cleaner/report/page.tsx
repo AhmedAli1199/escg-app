@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Card, StatusBar, Navbar } from '@/components/ui'
+import imageCompression from 'browser-image-compression'
 
 type Severity = 'standard' | 'urgent'
 
@@ -44,15 +45,35 @@ export default function CleanerReport() {
     try {
       const fullDesc = severity === 'urgent' ? `[URGENT] ${description.trim()}` : description.trim()
 
-      const form = new FormData()
-      form.append('cleanerId',    shiftContext?.cleanerId  || '')
-      form.append('shiftLogId',   shiftContext?.logId      || '')
-      form.append('siteName',     shiftContext?.siteName   || '')
-      form.append('description',  fullDesc)
-      form.append('currentState', shiftContext?.state      || '')
-      if (photoFile) form.append('file', photoFile, photoFile.name || 'report.jpg')
+      let base64: string | undefined
+      let photoContentType: string | undefined
+      let photoFilename: string | undefined
 
-      const res = await fetch('/api/incidents', { method: 'POST', body: form })
+      if (photoFile) {
+        const compressed = await imageCompression(photoFile, { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true }).catch(() => photoFile)
+        const buffer = await compressed.arrayBuffer()
+        const bytes = new Uint8Array(buffer)
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        base64 = btoa(binary)
+        photoContentType = photoFile.type || 'image/jpeg'
+        photoFilename = photoFile.name || 'report.jpg'
+      }
+
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cleanerId:    shiftContext?.cleanerId  || '',
+          shiftLogId:   shiftContext?.logId      || '',
+          siteName:     shiftContext?.siteName   || '',
+          description:  fullDesc,
+          currentState: shiftContext?.state      || '',
+          base64,
+          contentType:  photoContentType,
+          filename:     photoFilename,
+        }),
+      })
       if (!res.ok) throw new Error('Failed to submit')
       setSuccess(true)
     } catch {
