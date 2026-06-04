@@ -1,19 +1,34 @@
 'use client'
 // app/cleaner/help/page.tsx
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Card, StatusBar, Navbar } from '@/components/ui'
 
-export default function CleanerHelp() {
+function HelpForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+
+  const queryLogId = searchParams.get('shiftLogId')
+  const querySiteName = searchParams.get('siteName')
+
   const [shiftContext, setShiftContext] = useState<{
     logId: string; cleanerId: string; siteName: string; state: string
   } | null>(null)
 
   useEffect(() => {
+    if (queryLogId && querySiteName) {
+      setShiftContext({
+        logId:     queryLogId,
+        cleanerId: '',
+        siteName:  querySiteName,
+        state:     'Active',
+      })
+      return
+    }
+
     fetch('/api/shifts')
       .then(res => {
         if (res.status === 401) { router.push('/login'); return null }
@@ -31,7 +46,7 @@ export default function CleanerHelp() {
         })
       })
       .catch(() => {})
-  }, [])
+  }, [queryLogId, querySiteName])
 
   async function handleSendHelp() {
     setSending(true)
@@ -106,5 +121,21 @@ export default function CleanerHelp() {
         </Button>
       </div>
     </div>
+  )
+}
+
+export default function CleanerHelp() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50">
+        <StatusBar />
+        <Navbar title="Need Help?" />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-gray-500">Loading form...</p>
+        </div>
+      </div>
+    }>
+      <HelpForm />
+    </Suspense>
   )
 }

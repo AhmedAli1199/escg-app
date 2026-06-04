@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (action === 'create_log') {
       const log = await createShiftLog({
         Assignment:      assignmentId ? [assignmentId] : undefined,
-        Cleaner:         cleanerId    ? [cleanerId]    : undefined,
+        Cleaner:         cleanerId    ? [cleanerId]    : [session.userId],
         Date:            getSydneyDateFormatted(),
         'Cleaner State': 'Menu Sent',
       })

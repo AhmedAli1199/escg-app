@@ -32,20 +32,16 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 export default function CleanerHome() {
   const router = useRouter()
-  const [shiftState, setShiftState] = useState<ShiftState>('loading')
-  const [shiftData, setShiftData]   = useState<any>(null)
-  const [logId, setLogId]           = useState('')
-  const [assignmentId, setAssignmentId] = useState('')
-  const [siteName, setSiteName]     = useState('')
-  const [signInTime, setSignInTime] = useState('')
-  const [signOutTime, setSignOutTime] = useState('')
-  const [photoUrls, setPhotoUrls]   = useState('')
-  const [photoCount, setPhotoCount] = useState(0)
+  const [loading, setLoading]       = useState(true)
+  const [shifts, setShifts]         = useState<any[]>([])
+  const [cleanerName, setCleanerName] = useState('')
+  const [uploadTargetId, setUploadTargetId] = useState('')
   const [uploading, setUploading]   = useState(false)
   const [completing, setCompleting] = useState(false)
   const [error, setError]           = useState('')
-  const [cleanerName, setCleanerName] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
+  
+  const signInFileRef = useRef<HTMLInputElement>(null)
+  const photosFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadShifts() }, [])
 
@@ -54,62 +50,47 @@ export default function CleanerHome() {
       const res = await fetch('/api/shifts')
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
-      setShiftData(data)
-
-      const { todayAssignments, activeLog } = data
       setCleanerName(data.cleanerName || '')
-
-      if (activeLog) {
-        setLogId(activeLog.id)
-        setSignInTime(activeLog.signInTime || '')
-        setSignOutTime(activeLog.signOutTime || '')
-        setPhotoUrls(activeLog.endPhotoUrls || '')
-        setPhotoCount(activeLog.endPhotoAttachments?.length ?? (activeLog.endPhotoUrls || '').split('\n').filter(Boolean).length)
-        setSiteName(activeLog.siteName || todayAssignments?.[0]?.site || '')
-
-        const s = activeLog.state
-        if (s === 'Awaiting Signin Photo') setShiftState('awaiting_photo')
-        else if (s === 'Active') setShiftState('active')
-        // 'Collecting End Photos' renamed to 'Awaiting End Photo' in base
-        else if (s === 'Collecting End Photos' || s === 'Awaiting End Photo') setShiftState('collecting_photos')
-        else if (s === 'Complete') setShiftState('complete')
-        else setShiftState('menu_sent')
-      } else if (todayAssignments?.length > 0) {
-        const a = todayAssignments[0]
-        setSiteName(a.site)
-        setAssignmentId(a.id)
-        setShiftState('menu_sent')
-      } else {
-        setShiftState('no_shift')
-      }
+      setShifts(data.shifts || [])
     } catch {
       setError('Failed to load shifts')
-      setShiftState('no_shift')
+    } finally {
+      setLoading(false)
     }
   }
 
-  async function handleSignIn() {
+  async function handleSignIn(assignmentId: string) {
     setUploading(true)
+    setError('')
     try {
-      let currentLogId = logId
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      let currentLogId = shift?.log?.id
+
       if (!currentLogId) {
         const res = await fetch('/api/checkin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'create_log', assignmentId }),
         })
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.error || 'Failed to create shift log')
+        }
         const data = await res.json()
         currentLogId = data.log.id
-        setLogId(currentLogId)
       }
+
       const res = await fetch('/api/checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sign_in', shiftLogId: currentLogId }),
       })
-      const data = await res.json()
-      setSignInTime(data.signInTime)
-      setShiftState('awaiting_photo')
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to sign in')
+      }
+
+      await loadShifts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -117,9 +98,14 @@ export default function CleanerHome() {
     }
   }
 
-  async function handleSignInPhoto(file: File) {
+  async function handleSignInPhoto(assignmentId: string, file: File) {
     setUploading(true)
+    setError('')
     try {
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      const currentLogId = shift?.log?.id
+      if (!currentLogId) throw new Error('No active shift log found')
+
       const compressed = await compressPhoto(file)
       const base64 = arrayBufferToBase64(await compressed.arrayBuffer())
 
@@ -128,7 +114,7 @@ export default function CleanerHome() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'sign_in_photo',
-          shiftLogId: logId,
+          shiftLogId: currentLogId,
           base64,
           contentType: file.type || 'image/jpeg',
           filename: file.name || 'signin.jpg',
@@ -138,7 +124,8 @@ export default function CleanerHome() {
         const data = await res.json()
         throw new Error(data.error || 'Upload failed')
       }
-      setShiftState('active')
+
+      await loadShifts()
     } catch (err: any) {
       setError(err.message || 'Photo upload failed. Try again.')
     } finally {
@@ -146,17 +133,25 @@ export default function CleanerHome() {
     }
   }
 
-  async function handleSignOut() {
+  async function handleSignOut(assignmentId: string) {
     setUploading(true)
+    setError('')
     try {
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      const currentLogId = shift?.log?.id
+      if (!currentLogId) throw new Error('No active shift log found')
+
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shiftLogId: logId, siteName }),
+        body: JSON.stringify({ shiftLogId: currentLogId, siteName: shift.assignment.site }),
       })
-      const data = await res.json()
-      setSignOutTime(data.signOutTime)
-      setShiftState('collecting_photos')
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to sign out')
+      }
+
+      await loadShifts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -164,11 +159,14 @@ export default function CleanerHome() {
     }
   }
 
-  async function handlePhotos(files: FileList) {
+  async function handlePhotos(assignmentId: string, files: FileList) {
     setUploading(true)
+    setError('')
     try {
-      let count = photoCount
-      let urls  = photoUrls
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      const currentLogId = shift?.log?.id
+      if (!currentLogId) throw new Error('No active shift log found')
+
       for (const file of Array.from(files)) {
         const compressed = await compressPhoto(file)
         const base64 = arrayBufferToBase64(await compressed.arrayBuffer())
@@ -177,7 +175,7 @@ export default function CleanerHome() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            shiftLogId: logId,
+            shiftLogId: currentLogId,
             base64,
             contentType: file.type || 'image/jpeg',
             filename: file.name || 'photo.jpg',
@@ -187,12 +185,9 @@ export default function CleanerHome() {
           const data = await res.json()
           throw new Error(data.error || 'Upload failed')
         }
-        const data = await res.json()
-        urls  = data.updatedUrls || urls
-        count = data.photoCount || count + 1
       }
-      setPhotoUrls(urls)
-      setPhotoCount(count)
+
+      await loadShifts()
     } catch (err: any) {
       setError(err.message || 'Some photos failed to upload. Try again.')
     } finally {
@@ -200,25 +195,42 @@ export default function CleanerHome() {
     }
   }
 
-  async function handleComplete() {
-    if (photoCount === 0) { setError('Please send at least one photo first'); return }
+  async function handleComplete(assignmentId: string) {
+    const shift = shifts.find(s => s.assignment.id === assignmentId)
+    const currentLogId = shift?.log?.id
+    if (!currentLogId) throw new Error('No active shift log found')
+
+    const photoCount = shift.log.endPhotoAttachments?.length ?? (shift.log.endPhotoUrls || '').split('\n').filter(Boolean).length
+    if (photoCount === 0) {
+      setError('Please send at least one photo first')
+      return
+    }
+
     setCompleting(true)
+    setError('')
     try {
-      await fetch('/api/complete', {
+      const res = await fetch('/api/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shiftLogId: logId, signInTime, signOutTime, siteName, photoCount }),
+        body: JSON.stringify({
+          shiftLogId: currentLogId,
+          signInTime: shift.log.signInTime,
+          signOutTime: shift.log.signOutTime,
+          siteName: shift.assignment.site,
+          photoCount,
+        }),
       })
-      setShiftState('complete')
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to complete shift')
+      }
+
+      await loadShifts()
     } catch (err: any) {
       setError(err.message)
     } finally {
       setCompleting(false)
     }
-  }
-
-  async function handleCantMakeIt() {
-    router.push('/cleaner/report?type=unavailable')
   }
 
   const hr = new Date().getHours()
@@ -245,11 +257,11 @@ export default function CleanerHome() {
           </div>
         )}
 
-        {shiftState === 'loading' && (
+        {loading && (
           <div className="flex justify-center items-center h-48"><Spinner /></div>
         )}
 
-        {shiftState === 'no_shift' && (
+        {!loading && shifts.length === 0 && (
           <>
             <div className="mx-4 mt-4 bg-blue-800 rounded-2xl p-5 text-white">
               <p className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">Today</p>
@@ -261,110 +273,132 @@ export default function CleanerHome() {
           </>
         )}
 
-        {shiftState === 'menu_sent' && (
-          <>
-            <HeroCard site={siteName} state="Not started" shiftData={shiftData?.todayAssignments?.[0]} />
-            <div className="mx-4 flex flex-col gap-3 mt-1">
-              <Button onClick={handleSignIn} loading={uploading}>Sign In to Shift</Button>
-              <Button variant="danger" onClick={handleCantMakeIt} className="h-11 text-sm">Can't Make It</Button>
-            </div>
+        {!loading && shifts.length > 0 && (
+          <div className="flex flex-col gap-4 pb-4">
+            {shifts.map((shift) => {
+              const { assignment, log, state } = shift
+              const signInTime = log?.signInTime || ''
+              const signOutTime = log?.signOutTime || ''
+              const photoCount = log?.endPhotoAttachments?.length ?? (log?.endPhotoUrls || '').split('\n').filter(Boolean).length
+
+              return (
+                <div key={assignment.id} className="mx-4 mt-4 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                  {/* Shift Info */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-900 text-lg">{assignment.site}</p>
+                      {assignment.windowStart && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          🕐 {assignment.isWeekendShift ? 'Weekend — flexible' : `${assignment.windowStart}${assignment.windowEnd ? ` – ${assignment.windowEnd}` : ''}`}
+                        </p>
+                      )}
+                      {signInTime && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          In: {signInTime} {signOutTime ? `→ Out: ${signOutTime}` : ''}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant={state === 'complete' ? 'green' : state === 'active' ? 'green' : state === 'menu_sent' ? 'amber' : 'blue'}>
+                      {state === 'menu_sent' ? 'Not started' : state === 'awaiting_photo' ? 'Sign-in photo needed' : state === 'active' ? 'Active' : state === 'collecting_photos' ? 'End photos needed' : 'Complete'}
+                    </Badge>
+                  </div>
+
+                  {/* Actions based on state */}
+                  {state === 'menu_sent' && (
+                    <div className="flex flex-col gap-2.5">
+                      <Button onClick={() => handleSignIn(assignment.id)} loading={uploading}>Sign In to Shift</Button>
+                      <Button variant="danger" onClick={() => router.push(`/cleaner/report?type=unavailable&siteName=${encodeURIComponent(assignment.site)}`)} className="h-11 text-sm">Can't Make It</Button>
+                    </div>
+                  )}
+
+                  {state === 'awaiting_photo' && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">📸</span>
+                        <p className="font-semibold text-sm text-gray-900">Entrance photo required</p>
+                      </div>
+                      <p className="text-xs text-gray-600">Take a photo of the entrance or site signage to confirm you're on location.</p>
+                      <Button loading={uploading} onClick={() => {
+                        setUploadTargetId(assignment.id)
+                        signInFileRef.current?.click()
+                      }}>
+                        📷 Take entrance photo
+                      </Button>
+                    </div>
+                  )}
+
+                  {state === 'active' && (
+                    <div className="flex flex-col gap-2.5">
+                      <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 flex items-center gap-2.5">
+                        <span className="text-green-600 text-base">✅</span>
+                        <div>
+                          <p className="text-xs font-semibold text-green-800">Shift in progress</p>
+                          <p className="text-[10px] text-green-600">Signed in at {signInTime}</p>
+                        </div>
+                      </div>
+                      <Button loading={uploading} onClick={() => handleSignOut(assignment.id)}>Sign Out</Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button variant="secondary" className="h-10 text-xs" onClick={() => router.push(`/cleaner/report?shiftLogId=${log?.id}&siteName=${encodeURIComponent(assignment.site)}`)}>⚠️ Report issue</Button>
+                        <Button variant="secondary" className="h-10 text-xs" onClick={() => router.push(`/cleaner/help?shiftLogId=${log?.id}&siteName=${encodeURIComponent(assignment.site)}`)}>🆘 Need help</Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {state === 'collecting_photos' && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">📸</span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm text-gray-900">End-of-shift photos</p>
+                          <p className="text-xs text-gray-500">{photoCount} photo{photoCount !== 1 ? 's' : ''} uploaded</p>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-gray-200/60 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(100, photoCount * 20)}%` }} />
+                      </div>
+                      <div className="flex flex-col gap-2 mt-1">
+                        <Button variant="secondary" className="h-10 text-xs" loading={uploading} onClick={() => {
+                          setUploadTargetId(assignment.id)
+                          photosFileRef.current?.click()
+                        }}>
+                          ➕ Add more photos
+                        </Button>
+                        <Button loading={completing} disabled={photoCount === 0} onClick={() => handleComplete(assignment.id)}>
+                          ✅ Complete shift ({photoCount} photo{photoCount !== 1 ? 's' : ''})
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {state === 'complete' && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🎉</span>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900">All done!</p>
+                          <p className="text-[10px] text-gray-500">Your manager has been notified.</p>
+                        </div>
+                      </div>
+                      <div className="bg-white border border-gray-100 rounded-lg p-2.5 text-xs flex flex-col gap-1.5 shadow-sm">
+                        <div className="flex justify-between"><span className="text-gray-400">Sign in</span><span className="font-semibold">{signInTime}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-400">Sign out</span><span className="font-semibold">{signOutTime}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-400">Photos</span><span className="font-semibold text-green-600">{photoCount} submitted</span></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             <SectionLabel>Quick access</SectionLabel>
             <ActionGrid router={router} />
-          </>
+          </div>
         )}
 
-        {shiftState === 'awaiting_photo' && (
-          <>
-            <HeroCard site={siteName} state="Sign-in photo needed" badge="blue" signInTime={signInTime} />
-            <Card className="mx-4 mt-1">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-xl">📸</div>
-                <div>
-                  <p className="font-semibold text-gray-900">Entrance photo required</p>
-                  <p className="text-xs text-gray-500">Signed in at {signInTime}</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">Take a photo of the entrance or site signage to confirm you're on location.</p>
-              <Button loading={uploading} onClick={() => fileRef.current?.click()}>
-                📷 Take entrance photo
-              </Button>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => e.target.files?.[0] && handleSignInPhoto(e.target.files[0])} />
-            </Card>
-          </>
-        )}
+        <input ref={signInFileRef} type="file" accept="image/*" capture="environment" className="hidden"
+          onChange={e => e.target.files?.[0] && handleSignInPhoto(uploadTargetId, e.target.files[0])} />
 
-        {shiftState === 'active' && (
-          <>
-            <HeroCard site={siteName} state="Active shift" badge="green" signInTime={signInTime} />
-            <div className="mx-4 mt-1 flex flex-col gap-3">
-              <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-3">
-                <span className="text-green-600 text-lg">✅</span>
-                <div>
-                  <p className="text-sm font-semibold text-green-800">Shift in progress</p>
-                  <p className="text-xs text-green-600">Signed in at {signInTime}</p>
-                </div>
-              </div>
-              <Button loading={uploading} onClick={handleSignOut}>Sign Out</Button>
-              <div className="grid grid-cols-2 gap-3">
-                <Button variant="secondary" className="h-11 text-sm" onClick={() => router.push('/cleaner/report')}>⚠️ Report issue</Button>
-                <Button variant="secondary" className="h-11 text-sm" onClick={() => router.push('/cleaner/help')}>🆘 Need help</Button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {shiftState === 'collecting_photos' && (
-          <>
-            <HeroCard site={siteName} state="Send end-of-shift photos" badge="blue" signInTime={signInTime} signOutTime={signOutTime} />
-            <Card className="mx-4 mt-1 mb-3">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-xl">📸</div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">End-of-shift photos</p>
-                  <p className="text-xs text-gray-500">{photoCount} photo{photoCount !== 1 ? 's' : ''} uploaded</p>
-                </div>
-              </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-                <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${Math.min(100, photoCount * 20)}%` }} />
-              </div>
-              <p className="text-xs text-gray-400 mb-4">
-                {photoCount > 0 ? `${photoCount} photo${photoCount !== 1 ? 's' : ''} ready to submit` : 'Select photos below to submit'}
-              </p>
-              <div className="flex flex-col gap-3">
-                <Button variant="secondary" loading={uploading} onClick={() => fileRef.current?.click()}>
-                  ➕ Add more photos
-                </Button>
-                <Button loading={completing} disabled={photoCount === 0} onClick={handleComplete}>
-                  ✅ Complete shift ({photoCount} photo{photoCount !== 1 ? 's' : ''})
-                </Button>
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={e => e.target.files && handlePhotos(e.target.files)} />
-            </Card>
-          </>
-        )}
-
-        {shiftState === 'complete' && (
-          <>
-            <div className="bg-gradient-to-br from-blue-800 to-teal-800 mx-4 mt-4 rounded-2xl p-6 text-white text-center">
-              <div className="text-5xl mb-3">✅</div>
-              <p className="text-xl font-bold mb-1">All done!</p>
-              <p className="text-white/70 text-sm">Your manager has been notified</p>
-            </div>
-            <Card className="mx-4 mt-3">
-              <p className="font-bold text-gray-900 mb-4">Shift summary</p>
-              <div className="space-y-3 text-sm">
-                <SummaryRow label="Site"      value={siteName} />
-                <div className="h-px bg-gray-100" />
-                <SummaryRow label="Sign in"   value={signInTime} />
-                <SummaryRow label="Sign out"  value={signOutTime} />
-                <div className="h-px bg-gray-100" />
-                <SummaryRow label="Photos"    value={`${photoCount} submitted`} highlight />
-              </div>
-            </Card>
-          </>
-        )}
+        <input ref={photosFileRef} type="file" accept="image/*" multiple className="hidden"
+          onChange={e => e.target.files && handlePhotos(uploadTargetId, e.target.files)} />
 
         <div className="h-6" />
       </div>

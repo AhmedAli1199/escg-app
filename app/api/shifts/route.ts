@@ -30,11 +30,69 @@ export async function GET() {
     ).getDay()
     const yesterdayAbbr = sydneyHour < 8 ? days[(todayIdx + 6) % 7] : undefined
 
-    const assignments = await getAssignmentsForCleaner(session.name, todayAbbr, yesterdayAbbr)
-    const filtered    = filterByFrequency(assignments, now)
-    const shiftLogs   = await getActiveShiftLogsForCleaner(session.phone || '')
+    const allAssignments = await getAssignmentsForCleaner(session.name, undefined, undefined)
+    
+    // For today/yesterday overnight assignments
+    const assignments = allAssignments.filter(a => {
+      const matchToday = a.days.includes(todayAbbr)
+      const matchYesterday = yesterdayAbbr ? a.days.includes(yesterdayAbbr) : false
+      return matchToday || matchYesterday
+    })
+    const filtered = filterByFrequency(assignments, now)
+    
+    const shiftLogs = await getActiveShiftLogsForCleaner(session.phone || '')
 
-    // Find the active (non-complete) log
+    // Pair assignments with logs to determine status of each card
+    const shifts = filtered.map(assignment => {
+      const log = shiftLogs.find(l => l.assignmentId === assignment.id)
+      let state = 'menu_sent'
+      if (log) {
+        const s = log.state
+        if (s === 'Awaiting Signin Photo') state = 'awaiting_photo'
+        else if (s === 'Active') state = 'active'
+        else if (s === 'Collecting End Photos' || s === 'Awaiting End Photo') state = 'collecting_photos'
+        else if (s === 'Complete') state = 'complete'
+      }
+      return {
+        assignment,
+        log: log || null,
+        state,
+      }
+    })
+
+    // Include unmatched active logs to avoid losing any active shifts
+    for (const log of shiftLogs) {
+      if (log.state !== 'Complete' && log.state !== 'Unavailable' && log.state !== 'Incident Only') {
+        const alreadyIncluded = shifts.some(s => s.log?.id === log.id || s.assignment.id === log.assignmentId)
+        if (!alreadyIncluded) {
+          const assignment = allAssignments.find(a => a.id === log.assignmentId) || {
+            id: log.assignmentId,
+            site: log.siteName || 'Unknown Site',
+            cleaner: session.name,
+            days: [],
+            frequency: 'Weekly',
+            windowStart: null,
+            windowEnd: null,
+            isWeekendShift: false,
+            active: true,
+            lastTriggered: null,
+          }
+          let state = 'menu_sent'
+          const s = log.state
+          if (s === 'Awaiting Signin Photo') state = 'awaiting_photo'
+          else if (s === 'Active') state = 'active'
+          else if (s === 'Collecting End Photos' || s === 'Awaiting End Photo') state = 'collecting_photos'
+          
+          shifts.push({
+            assignment,
+            log,
+            state,
+          })
+        }
+      }
+    }
+
+    // Find the first active (non-complete) log for backwards compatibility
     const activeLog = shiftLogs.find(l =>
       l.state !== 'Complete' && l.state !== 'Unavailable' && l.state !== 'Incident Only'
     )
@@ -49,7 +107,6 @@ export async function GET() {
       return { d, dayAbbr, dateStr, dayOfMonth: d.getDate() }
     })
 
-    const allAssignments = await getAssignmentsForCleaner(session.name, '', undefined)
     const schedule = upcomingDays.flatMap(({ d, dayAbbr, dateStr, dayOfMonth }) => {
       const dayAssigns = allAssignments.filter(a => a.days.includes(dayAbbr))
       const validAssigns = filterByFrequency(dayAssigns, d)
@@ -57,10 +114,12 @@ export async function GET() {
     })
 
     return NextResponse.json({
+      cleanerName: session.name,
       todayAssignments: filtered,
       activeLog: activeLog || null,
       completedLogs,
       schedule,
+      shifts,
     })
   } catch (err: any) {
     console.error('Shifts error:', err)

@@ -1,15 +1,19 @@
 'use client'
 // app/cleaner/report/page.tsx
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Card, StatusBar, Navbar } from '@/components/ui'
 import imageCompression from 'browser-image-compression'
 
 type Severity = 'standard' | 'urgent'
 
-export default function CleanerReport() {
+function ReportForm() {
   const router  = useRouter()
+  const searchParams = useSearchParams()
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const queryLogId = searchParams.get('shiftLogId')
+  const querySiteName = searchParams.get('siteName')
 
   const [description, setDescription] = useState('')
   const [severity, setSeverity]       = useState<Severity>('standard')
@@ -22,6 +26,16 @@ export default function CleanerReport() {
   } | null>(null)
 
   useEffect(() => {
+    if (queryLogId && querySiteName) {
+      setShiftContext({
+        logId:      queryLogId,
+        cleanerId:  '',
+        siteName:   querySiteName,
+        state:      'Active',
+      })
+      return
+    }
+
     fetch('/api/shifts')
       .then(res => { if (res.status === 401) { router.push('/login'); return null } return res.json() })
       .then(data => {
@@ -36,7 +50,7 @@ export default function CleanerReport() {
         })
       })
       .catch(() => {})
-  }, [])
+  }, [queryLogId, querySiteName])
 
   async function handleSubmit() {
     if (!description.trim()) { setError('Please describe the issue'); return }
@@ -177,5 +191,21 @@ export default function CleanerReport() {
         <div className="h-4" />
       </div>
     </div>
+  )
+}
+
+export default function CleanerReport() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50">
+        <StatusBar />
+        <Navbar title="Report Issue" />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-gray-500">Loading form...</p>
+        </div>
+      </div>
+    }>
+      <ReportForm />
+    </Suspense>
   )
 }

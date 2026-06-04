@@ -187,10 +187,12 @@ function normaliseAssignment(rec: any): Assignment {
   }
 }
 
-export async function getAssignmentsForCleaner(cleanerName: string, dayAbbr: string, alsoYesterday?: string): Promise<Assignment[]> {
-  let formula = `AND({Cleaner} = "${cleanerName}", {Active} = 1, FIND("${dayAbbr}", {Days}))`
-  if (alsoYesterday) {
+export async function getAssignmentsForCleaner(cleanerName: string, dayAbbr?: string, alsoYesterday?: string): Promise<Assignment[]> {
+  let formula = `AND({Cleaner} = "${cleanerName}", {Active} = 1)`
+  if (dayAbbr && alsoYesterday) {
     formula = `AND({Cleaner} = "${cleanerName}", {Active} = 1, OR(FIND("${dayAbbr}", {Days}), FIND("${alsoYesterday}", {Days})))`
+  } else if (dayAbbr) {
+    formula = `AND({Cleaner} = "${cleanerName}", {Active} = 1, FIND("${dayAbbr}", {Days}))`
   }
   const records = await fetchAllRecords(TABLES.ASSIGNMENTS, formula)
   return records.map(normaliseAssignment)
@@ -286,15 +288,17 @@ export async function getShiftLog(id: string): Promise<ShiftLog> {
 }
 
 export async function getActiveShiftLogsForCleaner(phone: string): Promise<ShiftLog[]> {
-  const today     = new Date()
-  const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
+  const todayStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Australia/Sydney' })
+  const [day, month, year] = todayStr.split('/').map(Number)
 
-  const fmt = (d: Date) =>
-    `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+  // Construct a date in UTC at noon to avoid timezone shift during subtraction
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+  utcDate.setUTCDate(utcDate.getUTCDate() - 1)
+
+  const yesterdayStr = `${String(utcDate.getUTCDate()).padStart(2, '0')}/${String(utcDate.getUTCMonth() + 1).padStart(2, '0')}/${utcDate.getUTCFullYear()}`
 
   const formula = encodeURIComponent(
-    `AND({Phone (from Cleaner)} = "${phone}", OR({Date} = "${fmt(today)}", {Date} = "${fmt(yesterday)}"))`
+    `AND({Phone (from Cleaner)} = "${phone}", OR({Date} = "${todayStr}", {Date} = "${yesterdayStr}"))`
   )
   const data = await airtableFetch(`/${TABLES.SHIFT_LOGS}?filterByFormula=${formula}`)
   return (data.records || []).map(normaliseLog)
