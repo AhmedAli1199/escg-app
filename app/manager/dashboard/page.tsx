@@ -112,7 +112,7 @@ export default function ManagerDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-2.5 p-4 pb-2">
           {[
-            { label: 'Scheduled', value: stats.scheduled, color: 'text-gray-900' },
+            { label: 'Scheduled', value: (stats.scheduled ?? 0) - (stats.complete ?? 0), color: 'text-gray-900' },
             { label: 'Complete',  value: stats.complete,  color: 'text-green-600' },
             { label: 'Active',    value: stats.active,    color: 'text-blue-600'  },
             { label: 'No show',   value: stats.noShow,    color: 'text-red-600'   },

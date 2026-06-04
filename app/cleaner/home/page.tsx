@@ -307,7 +307,7 @@ export default function CleanerHome() {
                   {state === 'menu_sent' && (
                     <div className="flex flex-col gap-2.5">
                       <Button onClick={() => handleSignIn(assignment.id)} loading={uploading}>Sign In to Shift</Button>
-                      <Button variant="danger" onClick={() => router.push(`/cleaner/report?type=unavailable&siteName=${encodeURIComponent(assignment.site)}`)} className="h-11 text-sm">Can't Make It</Button>
+                      <Button variant="danger" onClick={() => router.push(`/cleaner/report?type=unavailable&assignmentId=${assignment.id}&shiftLogId=${log?.id || ''}&siteName=${encodeURIComponent(assignment.site)}`)} className="h-11 text-sm">Can't Make It</Button>
                     </div>
                   )}
 

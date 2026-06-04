@@ -330,18 +330,40 @@ export async function getAllShiftLogsForDate(dateStr: string): Promise<ShiftLog[
 }
 
 export async function getAllShiftLogs(limit = 200): Promise<ShiftLog[]> {
-  const data = await airtableFetch(
-    `/${TABLES.SHIFT_LOGS}?pageSize=${Math.min(limit, 100)}&sort[0][field]=Date&sort[0][direction]=desc`
-  )
-  return (data.records || []).map(normaliseLog)
+  const records = await fetchAllRecords(TABLES.SHIFT_LOGS)
+  const logs = records.map(normaliseLog)
+  
+  logs.sort((a: ShiftLog, b: ShiftLog) => {
+    const parse = (dStr: string, tStr: string) => {
+      if (!dStr) return 0
+      const [d, m, y] = dStr.split('/').map(Number)
+      const [hh, mm] = (tStr || '00:00').split(':').map(Number)
+      return new Date(y, m - 1, d, hh, mm).getTime()
+    }
+    return parse(b.date, b.signInTime) - parse(a.date, a.signInTime)
+  })
+  
+  return logs.slice(0, limit)
 }
 
 export async function getShiftLogHistoryForCleaner(phone: string, limit = 100): Promise<ShiftLog[]> {
   const formula = encodeURIComponent(`{Phone (from Cleaner)} = "${phone}"`)
   const data = await airtableFetch(
-    `/${TABLES.SHIFT_LOGS}?filterByFormula=${formula}&pageSize=${Math.min(limit, 100)}&sort[0][field]=Date&sort[0][direction]=desc`
+    `/${TABLES.SHIFT_LOGS}?filterByFormula=${formula}`
   )
-  return (data.records || []).map(normaliseLog)
+  const logs = (data.records || []).map(normaliseLog)
+  
+  logs.sort((a: ShiftLog, b: ShiftLog) => {
+    const parse = (dStr: string, tStr: string) => {
+      if (!dStr) return 0
+      const [d, m, y] = dStr.split('/').map(Number)
+      const [hh, mm] = (tStr || '00:00').split(':').map(Number)
+      return new Date(y, m - 1, d, hh, mm).getTime()
+    }
+    return parse(b.date, b.signInTime) - parse(a.date, a.signInTime)
+  })
+  
+  return logs.slice(0, limit)
 }
 
 export async function createShiftLog(fields: Record<string, any>): Promise<ShiftLog> {
@@ -374,19 +396,32 @@ export async function createIncident(fields: Record<string, any>): Promise<{ id:
 
 export async function getAllIncidents(): Promise<Incident[]> {
   const data = await airtableFetch(
-    `/${TABLES.INCIDENTS}?sort[0][field]=Date&sort[0][direction]=desc`
+    `/${TABLES.INCIDENTS}`
   )
-  return (data.records || []).map((rec: any) => ({
-    id:             rec.id,
-    site:           rec.fields?.Site || '',
-    date:           rec.fields?.Date || '',
-    description:    rec.fields?.Description || '',
-    // Photo is multipleAttachments — return first URL for display
-    photoUrl:       Array.isArray(rec.fields?.Photo) ? (rec.fields.Photo[0]?.url || '') : '',
-    // Status singleSelect: "Done" means resolved
-    resolved:       rec.fields?.Status?.name === 'Done',
-    managerAlerted: rec.fields?.['Manager Alerted'] || false,
-  }))
+  const incidents = (data.records || [])
+    .filter((rec: any) => rec.fields?.Site !== '__push_subscription_manager__')
+    .map((rec: any) => ({
+      id:             rec.id,
+      site:           rec.fields?.Site || '',
+      date:           rec.fields?.Date || '',
+      description:    rec.fields?.Description || '',
+      // Photo is multipleAttachments — return first URL for display
+      photoUrl:       Array.isArray(rec.fields?.Photo) ? (rec.fields.Photo[0]?.url || '') : '',
+      // Status singleSelect: "Done" means resolved
+      resolved:       rec.fields?.Status?.name === 'Done',
+      managerAlerted: rec.fields?.['Manager Alerted'] || false,
+    }))
+
+  incidents.sort((a: Incident, b: Incident) => {
+    const parse = (dStr: string) => {
+      if (!dStr) return 0
+      const [d, m, y] = dStr.split('/').map(Number)
+      return new Date(y, m - 1, d).getTime()
+    }
+    return parse(b.date) - parse(a.date)
+  })
+
+  return incidents
 }
 
 export async function updateIncident(id: string, fields: Record<string, any>) {
@@ -394,6 +429,94 @@ export async function updateIncident(id: string, fields: Record<string, any>) {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   })
+}
+
+// ─── MANAGER PUSH SUBSCRIPTIONS ───────────────────────────────
+export async function getManagerSubscriptions(): Promise<any[]> {
+  try {
+    const formula = encodeURIComponent(`{Site} = "__push_subscription_manager__"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    if (!rec) return []
+    const desc = rec.fields?.Description || ''
+    if (!desc) return []
+    return JSON.parse(desc)
+  } catch (e) {
+    console.error('Failed to get manager subscriptions:', e)
+    return []
+  }
+}
+
+export async function saveManagerSubscription(sub: any): Promise<void> {
+  try {
+    const formula = encodeURIComponent(`{Site} = "__push_subscription_manager__"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    
+    let subs = []
+    if (rec) {
+      const desc = rec.fields?.Description || ''
+      if (desc) {
+        try {
+          subs = JSON.parse(desc)
+        } catch (_) {}
+      }
+    }
+    
+    // Check if subscription already exists (by endpoint)
+    const exists = subs.some((s: any) => s.endpoint === sub.endpoint)
+    if (!exists) {
+      subs.push(sub)
+    } else {
+      // update keys if changed
+      subs = subs.map((s: any) => s.endpoint === sub.endpoint ? sub : s)
+    }
+    
+    const fields = {
+      Site: '__push_subscription_manager__',
+      Description: JSON.stringify(subs),
+      Date: getSydneyDateFormatted(),
+    }
+    
+    if (rec) {
+      await airtableFetch(`/${TABLES.INCIDENTS}/${rec.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields }),
+      })
+    } else {
+      await airtableFetch(`/${TABLES.INCIDENTS}`, {
+        method: 'POST',
+        body: JSON.stringify({ fields }),
+      })
+    }
+  } catch (e) {
+    console.error('Failed to save manager subscription:', e)
+  }
+}
+
+export async function removeManagerSubscription(endpoint: string): Promise<void> {
+  try {
+    const formula = encodeURIComponent(`{Site} = "__push_subscription_manager__"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    if (!rec) return
+    
+    const desc = rec.fields?.Description || ''
+    if (!desc) return
+    let subs = JSON.parse(desc)
+    subs = subs.filter((s: any) => s.endpoint !== endpoint)
+    
+    await airtableFetch(`/${TABLES.INCIDENTS}/${rec.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fields: {
+          Description: JSON.stringify(subs)
+        }
+      }),
+    })
+  } catch (e) {
+    console.error('Failed to remove manager subscription:', e)
+  }
 }
 
 // ─── ATTACHMENT UPLOAD ────────────────────────────────────────

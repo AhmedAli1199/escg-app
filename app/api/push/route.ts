@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const subscription = await req.json()
-    saveSubscription(session.userId, subscription)
+    await saveSubscription(session.userId, subscription)
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {

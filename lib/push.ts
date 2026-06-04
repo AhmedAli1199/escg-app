@@ -12,18 +12,16 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   )
 }
 
-// In production, store subscriptions in a DB or KV store.
-// For MVP, store in a simple JSON file or Airtable table.
-// Here we use an in-memory store (resets on server restart).
-// Claude Code: replace with Vercel KV or an Airtable "Push Subscriptions" table.
-const subscriptions: Map<string, webpush.PushSubscription> = new Map()
+import {
+  getManagerSubscriptions,
+  saveManagerSubscription,
+  removeManagerSubscription,
+} from './airtable'
 
-export function saveSubscription(userId: string, sub: webpush.PushSubscription) {
-  subscriptions.set(userId, sub)
-}
-
-export function getSubscription(userId: string): webpush.PushSubscription | undefined {
-  return subscriptions.get(userId)
+export async function saveSubscription(userId: string, sub: any) {
+  if (userId === 'manager') {
+    await saveManagerSubscription(sub)
+  }
 }
 
 export interface PushPayload {
@@ -35,23 +33,29 @@ export interface PushPayload {
   tag?: string
 }
 
-export async function sendPush(subscription: webpush.PushSubscription, payload: PushPayload) {
+export async function sendPush(subscription: any, payload: PushPayload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload))
   } catch (err: any) {
-    if (err.statusCode === 410) {
-      // Subscription expired — remove it
-      Array.from(subscriptions.entries()).forEach(([key, sub]) => {
-        if (sub.endpoint === subscription.endpoint) subscriptions.delete(key)
-      })
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      await removeManagerSubscription(subscription.endpoint)
     }
     console.error('Push failed:', err.message)
   }
 }
 
 export async function sendPushToManager(payload: PushPayload) {
-  const managerSub = getSubscription('manager')
-  if (managerSub) await sendPush(managerSub, payload)
+  const subs = await getManagerSubscriptions()
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify(payload))
+    } catch (err: any) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        await removeManagerSubscription(sub.endpoint)
+      }
+      console.error('Push to manager failed:', err.message)
+    }
+  }
 }
 
 // Notification templates

@@ -14,6 +14,8 @@ function ReportForm() {
 
   const queryLogId = searchParams.get('shiftLogId')
   const querySiteName = searchParams.get('siteName')
+  const queryType = searchParams.get('type')
+  const queryAssignmentId = searchParams.get('assignmentId')
 
   const [description, setDescription] = useState('')
   const [severity, setSeverity]       = useState<Severity>('standard')
@@ -22,16 +24,17 @@ function ReportForm() {
   const [success, setSuccess]         = useState(false)
   const [error, setError]             = useState('')
   const [shiftContext, setShiftContext] = useState<{
-    logId: string; cleanerId: string; siteName: string; state: string
+    logId: string; cleanerId: string; siteName: string; state: string; assignmentId: string
   } | null>(null)
 
   useEffect(() => {
-    if (queryLogId && querySiteName) {
+    if (querySiteName) {
       setShiftContext({
-        logId:      queryLogId,
+        logId:      queryLogId || '',
         cleanerId:  '',
         siteName:   querySiteName,
-        state:      'Active',
+        state:      'Menu Sent',
+        assignmentId: queryAssignmentId || '',
       })
       return
     }
@@ -47,17 +50,20 @@ function ReportForm() {
           cleanerId:  log?.cleanerId || '',
           siteName:   log?.siteName || assignment?.site || '',
           state:      log?.state || '',
+          assignmentId: log?.assignmentId || assignment?.id || '',
         })
       })
       .catch(() => {})
-  }, [queryLogId, querySiteName])
+  }, [queryLogId, querySiteName, queryAssignmentId])
 
   async function handleSubmit() {
-    if (!description.trim()) { setError('Please describe the issue'); return }
+    if (!description.trim()) { setError(queryType === 'unavailable' ? 'Please provide a reason' : 'Please describe the issue'); return }
     setSubmitting(true)
     setError('')
     try {
-      const fullDesc = severity === 'urgent' ? `[URGENT] ${description.trim()}` : description.trim()
+      const fullDesc = queryType === 'unavailable'
+        ? `[UNAVAILABLE] ${description.trim()}`
+        : severity === 'urgent' ? `[URGENT] ${description.trim()}` : description.trim()
 
       let base64: string | undefined
       let photoContentType: string | undefined
@@ -80,9 +86,11 @@ function ReportForm() {
         body: JSON.stringify({
           cleanerId:    shiftContext?.cleanerId  || '',
           shiftLogId:   shiftContext?.logId      || '',
+          assignmentId: shiftContext?.assignmentId || '',
           siteName:     shiftContext?.siteName   || '',
           description:  fullDesc,
           currentState: shiftContext?.state      || '',
+          type:         queryType                || 'standard',
           base64,
           contentType:  photoContentType,
           filename:     photoFilename,
@@ -101,10 +109,10 @@ function ReportForm() {
     return (
       <div className="flex flex-col h-screen bg-gray-50">
         <StatusBar />
-        <Navbar title="Report Issue" onBack={() => router.back()} />
+        <Navbar title={queryType === 'unavailable' ? "Report Unavailability" : "Report Issue"} onBack={() => router.back()} />
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="text-5xl mb-4">✅</div>
-          <p className="text-xl font-bold text-gray-900 mb-2">Report sent</p>
+          <p className="text-xl font-bold text-gray-900 mb-2">{queryType === 'unavailable' ? "Unavailability reported" : "Report sent"}</p>
           <p className="text-sm text-gray-500 mb-8">Your manager has been notified</p>
           <Button onClick={() => router.push('/cleaner/home')}>Back to home</Button>
         </div>
@@ -115,7 +123,7 @@ function ReportForm() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <StatusBar />
-      <Navbar title="Report Issue" onBack={() => router.back()} />
+      <Navbar title={queryType === 'unavailable' ? "Report Unavailability" : "Report Issue"} onBack={() => router.back()} />
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         {error && (
@@ -127,67 +135,75 @@ function ReportForm() {
 
         {shiftContext?.siteName && (
           <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm text-blue-800">
-            📍 Reporting for: <span className="font-semibold">{shiftContext.siteName}</span>
+            📍 {queryType === 'unavailable' ? 'Marking unavailable for' : 'Reporting for'}: <span className="font-semibold">{shiftContext.siteName}</span>
           </div>
         )}
 
         {/* Severity */}
-        <Card>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Severity</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(['standard', 'urgent'] as Severity[]).map(s => (
-              <button key={s} onClick={() => setSeverity(s)}
-                className={`h-11 rounded-xl border text-sm font-semibold transition-colors ${
-                  severity === s
-                    ? s === 'urgent' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'bg-gray-50 border-gray-200 text-gray-500'
-                }`}>
-                {s === 'urgent' ? '🚨 Urgent' : '📋 Standard'}
-              </button>
-            ))}
-          </div>
-        </Card>
+        {queryType !== 'unavailable' && (
+          <Card>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Severity</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['standard', 'urgent'] as Severity[]).map(s => (
+                <button key={s} onClick={() => setSeverity(s)}
+                  className={`h-11 rounded-xl border text-sm font-semibold transition-colors ${
+                    severity === s
+                      ? s === 'urgent' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-gray-50 border-gray-200 text-gray-500'
+                  }`}>
+                  {s === 'urgent' ? '🚨 Urgent' : '📋 Standard'}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Description */}
         <Card>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            {queryType === 'unavailable' ? "Reason for unavailability" : "Description"}
+          </p>
           <textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="Describe the issue in detail..."
+            placeholder={queryType === 'unavailable' ? "Please explain why you can't make it to this shift..." : "Describe the issue in detail..."}
             rows={5}
             className="w-full text-sm text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:border-blue-400"
           />
         </Card>
 
         {/* Photo */}
-        <Card>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Photo (optional)</p>
-          {photoFile ? (
-            <div className="flex items-center gap-3">
-              <div className="w-16 h-16 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl">📷</div>
-              <div>
-                <p className="text-sm font-semibold text-green-600">✓ Photo selected</p>
-                <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[160px]">{photoFile.name}</p>
-                <button onClick={() => setPhotoFile(null)} className="text-xs text-red-500 mt-0.5">Remove</button>
+        {queryType !== 'unavailable' && (
+          <Card>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Photo (optional)</p>
+            {photoFile ? (
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl">📷</div>
+                <div>
+                  <p className="text-sm font-semibold text-green-600">✓ Photo selected</p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[160px]">{photoFile.name}</p>
+                  <button onClick={() => setPhotoFile(null)} className="text-xs text-red-500 mt-0.5">Remove</button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-              📷 Add photo
-            </Button>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={e => e.target.files?.[0] && setPhotoFile(e.target.files[0])}
-          />
-        </Card>
+            ) : (
+              <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+                📷 Add photo
+              </Button>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={e => e.target.files?.[0] && setPhotoFile(e.target.files[0])}
+            />
+          </Card>
+        )}
 
-        <Button loading={submitting} onClick={handleSubmit}>Submit report</Button>
+        <Button loading={submitting} onClick={handleSubmit}>
+          {queryType === 'unavailable' ? "Submit unavailability" : "Submit report"}
+        </Button>
         <div className="h-4" />
       </div>
     </div>
