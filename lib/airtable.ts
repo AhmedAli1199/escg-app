@@ -519,6 +519,94 @@ export async function removeManagerSubscription(endpoint: string): Promise<void>
   }
 }
 
+// ─── CLEANER PUSH SUBSCRIPTIONS ───────────────────────────────
+export async function getCleanerSubscriptions(cleanerId: string): Promise<any[]> {
+  try {
+    const formula = encodeURIComponent(`{Site} = "__push_subscription_cleaner_${cleanerId}__"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    if (!rec) return []
+    const desc = rec.fields?.Description || ''
+    if (!desc) return []
+    return JSON.parse(desc)
+  } catch (e) {
+    console.error('Failed to get cleaner subscriptions:', e)
+    return []
+  }
+}
+
+export async function saveCleanerSubscription(cleanerId: string, sub: any): Promise<void> {
+  try {
+    const siteKey = `__push_subscription_cleaner_${cleanerId}__`
+    const formula = encodeURIComponent(`{Site} = "${siteKey}"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    
+    let subs = []
+    if (rec) {
+      const desc = rec.fields?.Description || ''
+      if (desc) {
+        try {
+          subs = JSON.parse(desc)
+        } catch (_) {}
+      }
+    }
+    
+    const exists = subs.some((s: any) => s.endpoint === sub.endpoint)
+    if (!exists) {
+      subs.push(sub)
+    } else {
+      subs = subs.map((s: any) => s.endpoint === sub.endpoint ? sub : s)
+    }
+    
+    const fields = {
+      Site: siteKey,
+      Description: JSON.stringify(subs),
+      Date: getSydneyDateFormatted(),
+    }
+    
+    if (rec) {
+      await airtableFetch(`/${TABLES.INCIDENTS}/${rec.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields }),
+      })
+    } else {
+      await airtableFetch(`/${TABLES.INCIDENTS}`, {
+        method: 'POST',
+        body: JSON.stringify({ fields }),
+      })
+    }
+  } catch (e) {
+    console.error('Failed to save cleaner subscription:', e)
+  }
+}
+
+export async function removeCleanerSubscription(cleanerId: string, endpoint: string): Promise<void> {
+  try {
+    const formula = encodeURIComponent(`{Site} = "__push_subscription_cleaner_${cleanerId}__"`)
+    const data = await airtableFetch(`/${TABLES.INCIDENTS}?filterByFormula=${formula}`)
+    const rec = data.records?.[0]
+    if (!rec) return
+    
+    const desc = rec.fields?.Description || ''
+    if (!desc) return
+    let subs = JSON.parse(desc)
+    subs = subs.filter((s: any) => s.endpoint !== endpoint)
+    
+    await airtableFetch(`/${TABLES.INCIDENTS}/${rec.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fields: {
+          Description: JSON.stringify(subs)
+        }
+      }),
+    })
+  } catch (e) {
+    console.error('Failed to remove cleaner subscription:', e)
+  }
+}
+
+
 // ─── ATTACHMENT UPLOAD ────────────────────────────────────────
 // Uploads a file directly to an Airtable multipleAttachments field.
 // Uses field NAME (not ID) so it works across base copies.

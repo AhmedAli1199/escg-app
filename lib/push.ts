@@ -16,11 +16,16 @@ import {
   getManagerSubscriptions,
   saveManagerSubscription,
   removeManagerSubscription,
+  getCleanerSubscriptions,
+  saveCleanerSubscription,
+  removeCleanerSubscription,
 } from './airtable'
 
 export async function saveSubscription(userId: string, sub: any) {
   if (userId === 'manager') {
     await saveManagerSubscription(sub)
+  } else {
+    await saveCleanerSubscription(userId, sub)
   }
 }
 
@@ -54,6 +59,20 @@ export async function sendPushToManager(payload: PushPayload) {
         await removeManagerSubscription(sub.endpoint)
       }
       console.error('Push to manager failed:', err.message)
+    }
+  }
+}
+
+export async function sendPushToCleaner(cleanerId: string, payload: PushPayload) {
+  const subs = await getCleanerSubscriptions(cleanerId)
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify(payload))
+    } catch (err: any) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        await removeCleanerSubscription(cleanerId, sub.endpoint)
+      }
+      console.error('Push to cleaner failed:', err.message)
     }
   }
 }
@@ -93,5 +112,19 @@ export const PUSH = {
     body: `${site} · Cleaner has requested assistance`,
     tag: `help-${cleanerName}`,
     data: { type: 'help' },
+  }),
+
+  reminder: (site: string): PushPayload => ({
+    title: `⏰ Upcoming Shift`,
+    body: `Reminder: You have a shift at ${site} soon. Don't forget to sign in!`,
+    tag: `reminder-${site}`,
+    data: { type: 'reminder' },
+  }),
+
+  lateAlert: (site: string): PushPayload => ({
+    title: `⚠️ Late Sign-in Alert`,
+    body: `You haven't signed into your shift at ${site} yet. Please sign in or report if you are unavailable.`,
+    tag: `late-${site}`,
+    data: { type: 'late' },
   }),
 }
