@@ -385,8 +385,8 @@ export async function uploadAttachment(
   const baseId = process.env.AIRTABLE_BASE_ID
   const token  = process.env.AIRTABLE_TOKEN
   const form   = new FormData()
-  form.append('file',     file, filename)
-  form.append('filename', filename)
+  form.append('file', file, filename)
+  // DO NOT append 'filename' separately — this causes 400
 
   const res = await fetch(
     `https://content.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`,
