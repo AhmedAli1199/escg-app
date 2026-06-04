@@ -45,20 +45,7 @@ export async function POST(req: NextRequest) {
       await uploadAttachment(incident.id, 'Photo', blob, filename || 'incident.jpg')
     }
 
-    if (shiftLogId && currentState) {
-      await updateShiftLog(shiftLogId, {
-        'Cleaner State':  'Incident Open',
-        'Previous State': currentState,
-        'Cleaner Notes':  `[${time}] ${description}`,
-      })
-    } else {
-      await createShiftLog({
-        Cleaner:          cleanerId ? [cleanerId] : undefined,
-        Date:             date,
-        'Cleaner State':  'Incident Only',
-        'Previous State': 'NO_LOG',
-      })
-    }
+
 
     await sendPushToManager(
       PUSH.incident(session.name, siteName || 'Unknown site', description || '')
