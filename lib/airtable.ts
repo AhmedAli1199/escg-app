@@ -381,21 +381,30 @@ export async function uploadAttachment(
   fieldId: string,
   file: Blob,
   filename: string,
-): Promise<{ id: string; url: string; filename: string }> {
+): Promise<any> {
   const baseId = process.env.AIRTABLE_BASE_ID
   const token  = process.env.AIRTABLE_TOKEN
-  const form   = new FormData()
-  form.append('file', file, filename)
-  // DO NOT append 'filename' separately — this causes 400
+
+  // Convert Blob/File to base64
+  const arrayBuffer = await file.arrayBuffer()
+  const base64 = Buffer.from(arrayBuffer).toString('base64')
 
   const res = await fetch(
-    `https://content.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`,
+    `https://api.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contentType: file.type || 'image/jpeg',
+        file: base64,
+        filename: filename || 'photo.jpg',
+      }),
     }
   )
+
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Airtable upload error ${res.status}: ${err}`)
