@@ -390,9 +390,13 @@ export async function uploadAttachment(
   const base64 = Buffer.from(arrayBuffer).toString('base64')
 
   const encodedFieldName = encodeURIComponent(fieldName)
+  const url = `https://content.airtable.com/v0/${baseId}/${recordId}/${encodedFieldName}/uploadAttachment`
+
+  console.log('[uploadAttachment] URL:', url)
+  console.log('[uploadAttachment] baseId:', baseId, '| recordId:', recordId, '| fieldName:', fieldName, '| filename:', filename, '| size:', arrayBuffer.byteLength)
 
   const res = await fetch(
-    `https://api.airtable.com/v0/${baseId}/${recordId}/${encodedFieldName}/uploadAttachment`,
+    url,
     {
       method: 'POST',
       headers: {

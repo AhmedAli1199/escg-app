@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
       if (!base64) {
         return NextResponse.json({ error: 'Missing base64 photo data' }, { status: 400 })
       }
+      if (!shiftLogId) {
+        return NextResponse.json({ error: 'Missing shiftLogId' }, { status: 400 })
+      }
       const buffer = Buffer.from(base64, 'base64')
       const blob = new Blob([buffer], { type: contentType || 'image/jpeg' })
 
