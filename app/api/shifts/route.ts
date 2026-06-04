@@ -40,7 +40,7 @@ export async function GET() {
     })
     const filtered = filterByFrequency(assignments, now)
     
-    const shiftLogs = await getActiveShiftLogsForCleaner(session.phone || '')
+    const shiftLogs = await getActiveShiftLogsForCleaner(session.userId, session.phone || '', allAssignments.map(a => a.site))
 
     // Pair assignments with logs to determine status of each card
     const shifts = filtered.map(assignment => {

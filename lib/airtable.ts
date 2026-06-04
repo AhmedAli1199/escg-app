@@ -287,7 +287,11 @@ export async function getShiftLog(id: string): Promise<ShiftLog> {
   return normaliseLog(data)
 }
 
-export async function getActiveShiftLogsForCleaner(phone: string): Promise<ShiftLog[]> {
+export async function getActiveShiftLogsForCleaner(
+  cleanerId: string,
+  phone: string,
+  assignmentSites: string[]
+): Promise<ShiftLog[]> {
   const todayStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Australia/Sydney' })
   const [day, month, year] = todayStr.split('/').map(Number)
 
@@ -297,8 +301,23 @@ export async function getActiveShiftLogsForCleaner(phone: string): Promise<Shift
 
   const yesterdayStr = `${String(utcDate.getUTCDate()).padStart(2, '0')}/${String(utcDate.getUTCMonth() + 1).padStart(2, '0')}/${utcDate.getUTCFullYear()}`
 
+  // Build the cleaner match condition:
+  // 1. By Cleaner record ID
+  const conditions = [`{Cleaner} = "${cleanerId}"`]
+  
+  // 2. By Phone number (via lookup if it exists or matches)
+  if (phone) {
+    conditions.push(`{Phone (from Cleaner)} = "${phone}"`)
+  }
+  
+  // 3. Fallback for blank Cleaner records: match by Assignment primary field (which is the Site Name)
+  if (assignmentSites && assignmentSites.length > 0) {
+    const siteMatch = assignmentSites.map(site => `{Assignment} = "${site}"`).join(',')
+    conditions.push(`AND({Cleaner} = "", OR(${siteMatch}))`)
+  }
+
   const formula = encodeURIComponent(
-    `AND({Phone (from Cleaner)} = "${phone}", OR({Date} = "${todayStr}", {Date} = "${yesterdayStr}"))`
+    `AND(OR(${conditions.join(',')}), OR({Date} = "${todayStr}", {Date} = "${yesterdayStr}"))`
   )
   const data = await airtableFetch(`/${TABLES.SHIFT_LOGS}?filterByFormula=${formula}`)
   return (data.records || []).map(normaliseLog)
