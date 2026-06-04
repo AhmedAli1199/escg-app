@@ -42,6 +42,7 @@ export default function ManagerLogs() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [page, setPage] = useState(0)
+  const [selectedLog, setSelectedLog] = useState<any>(null)
 
   useEffect(() => { loadLogs() }, [])
 
@@ -186,7 +187,11 @@ export default function ManagerLogs() {
             const { variant, label } = stateBadge(log.state)
             const dur = calcDuration(log.signInTime, log.signOutTime)
             return (
-              <div key={log.id} className="bg-white rounded-2xl border border-gray-200 px-4 py-3">
+              <div 
+                key={log.id} 
+                onClick={() => setSelectedLog(log)}
+                className="bg-white rounded-2xl border border-gray-200 px-4 py-3 active:scale-[0.98] transition-transform cursor-pointer shadow-sm hover:shadow-md"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{log.siteName || '—'}</p>
@@ -230,6 +235,85 @@ export default function ManagerLogs() {
         )}
         <div className="h-4" />
       </div>
+
+      {/* Log Details Modal */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-gray-50">
+          {/* Header */}
+          <div className="bg-blue-800 h-14 flex items-center px-4 justify-between flex-shrink-0 shadow-sm">
+            <span className="text-white font-semibold text-lg tracking-tight truncate pr-4">
+              {selectedLog.siteName || 'Shift Details'}
+            </span>
+            <button
+              onClick={() => setSelectedLog(null)}
+              className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full text-white active:bg-white/20"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Meta Info */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h3 className="text-gray-900 font-semibold">{selectedLog.cleanerName || 'Unknown Cleaner'}</h3>
+                  <p className="text-sm text-gray-500">{selectedLog.date || 'No Date'}</p>
+                </div>
+                <Badge variant={stateBadge(selectedLog.state).variant}>{stateBadge(selectedLog.state).label}</Badge>
+              </div>
+              
+              <div className="flex gap-4 text-sm text-gray-600 mt-2">
+                <div>
+                  <span className="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Sign In</span>
+                  {selectedLog.signInTime || '—'}
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Sign Out</span>
+                  {selectedLog.signOutTime || '—'}
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Duration</span>
+                  {calcDuration(selectedLog.signInTime, selectedLog.signOutTime) || '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {selectedLog.cleanerNotes && (
+              <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+                <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2">Cleaner Notes</h4>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedLog.cleanerNotes}</p>
+              </div>
+            )}
+
+            {/* Sign In Photo */}
+            {selectedLog.signInPhoto && (
+              <div className="space-y-2">
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider font-semibold px-1">Sign In Photo</h4>
+                <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100">
+                  <img src={selectedLog.signInPhoto} alt="Sign In" className="w-full h-auto object-cover" loading="lazy" />
+                </div>
+              </div>
+            )}
+
+            {/* End Photos */}
+            {selectedLog.endPhotoUrls && selectedLog.endPhotoUrls.trim().length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs text-gray-500 uppercase tracking-wider font-semibold px-1">Sign Out Photos</h4>
+                <div className="space-y-3">
+                  {selectedLog.endPhotoUrls.split('\\n').filter(Boolean).map((url: string, i: number) => (
+                    <div key={i} className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100">
+                      <img src={url} alt={`Sign Out ${i + 1}`} className="w-full h-auto object-cover" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <TabBar tabs={TABS} active="logs" onChange={id => {
         if (id === 'dashboard') router.push('/manager/dashboard')
