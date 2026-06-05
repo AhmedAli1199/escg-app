@@ -303,7 +303,7 @@ export default function ManagerLogs() {
               <div className="space-y-2">
                 <h4 className="text-xs text-gray-500 uppercase tracking-wider font-semibold px-1">Sign Out Photos</h4>
                 <div className="space-y-3">
-                  {selectedLog.endPhotoUrls.split('\\n').filter(Boolean).map((url: string, i: number) => (
+                  {selectedLog.endPhotoUrls.split('\n').filter(Boolean).map((url: string, i: number) => (
                     <div key={i} className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100">
                       <img src={url} alt={`Sign Out ${i + 1}`} className="w-full h-auto object-cover" loading="lazy" />
                     </div>
