@@ -399,7 +399,7 @@ export async function getAllIncidents(): Promise<Incident[]> {
     `/${TABLES.INCIDENTS}`
   )
   const incidents = (data.records || [])
-    .filter((rec: any) => rec.fields?.Site !== '__push_subscription_manager__')
+    .filter((rec: any) => !(rec.fields?.Site || '').startsWith('__push_subscription_'))
     .map((rec: any) => ({
       id:             rec.id,
       site:           rec.fields?.Site || '',
@@ -493,6 +493,8 @@ export async function saveManagerSubscription(sub: any): Promise<void> {
     console.error('Failed to save manager subscription:', e)
   }
 }
+
+
 
 export async function removeManagerSubscription(endpoint: string): Promise<void> {
   try {
