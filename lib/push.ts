@@ -4,10 +4,11 @@
 
 import webpush from 'web-push'
 
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+if (vapidPublicKey && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
     process.env.VAPID_EMAIL || 'mailto:admin@escg.com.au',
-    process.env.VAPID_PUBLIC_KEY,
+    vapidPublicKey,
     process.env.VAPID_PRIVATE_KEY
   )
 }
