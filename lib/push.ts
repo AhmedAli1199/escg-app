@@ -116,6 +116,13 @@ export const PUSH = {
     data: { type: 'unavailable' },
   }),
 
+  available: (cleanerName: string, site: string): PushPayload => ({
+    title: `✅ Available Again — ${cleanerName}`,
+    body: `${site} · Cleaner can now work this shift`,
+    tag: `avail-${cleanerName}`,
+    data: { type: 'available' },
+  }),
+
   needHelp: (cleanerName: string, site: string): PushPayload => ({
     title: `🆘 Help needed — ${cleanerName}`,
     body: `${site} · Cleaner has requested assistance`,

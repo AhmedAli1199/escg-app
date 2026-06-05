@@ -52,6 +52,7 @@ export async function GET() {
         else if (s === 'Active') state = 'active'
         else if (s === 'Collecting End Photos' || s === 'Awaiting End Photo') state = 'collecting_photos'
         else if (s === 'Complete') state = 'complete'
+        else if (s === 'Unavailable') state = 'unavailable'
       }
       return {
         assignment,

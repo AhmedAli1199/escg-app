@@ -34,6 +34,7 @@ export default function ManagerCleaners() {
   const [cleanerSummaries, setCleanerSummaries] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedCleaner, setSelectedCleaner] = useState<any | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -85,6 +86,28 @@ export default function ManagerCleaners() {
     return match ? match.date : 'Never'
   }
 
+  const cleanerStats = useMemo(() => {
+    if (!selectedCleaner) return null
+    const cleanerName = selectedCleaner.name
+    const cleanerLogs = logs.filter(l => l.cleanerName === cleanerName)
+    const completedLogs = cleanerLogs.filter(l => l.state === 'Complete')
+    
+    const thisWeekLogs = completedLogs.filter(l => {
+      const [d, m, y] = (l.date || '').split('/').map(Number)
+      if (!d) return false
+      return new Date(y, m - 1, d) >= weekMonday
+    })
+    
+    const hours = thisWeekLogs.reduce((sum: number, l: any) => sum + calcHours(l.signInTime, l.signOutTime), 0)
+    
+    return {
+      shiftsThisWeek: thisWeekLogs.length,
+      hoursThisWeek: Math.round(hours * 10) / 10,
+      totalCompleted: completedLogs.length,
+      logs: cleanerLogs.slice(0, 10), // last 10 logs for history
+    }
+  }, [selectedCleaner, logs, weekMonday])
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <StatusBar />
@@ -114,7 +137,7 @@ export default function ManagerCleaners() {
                 const initial = (c.name || '?').charAt(0).toUpperCase()
 
                 return (
-                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                  <div key={c.id} onClick={() => setSelectedCleaner(c)} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 cursor-pointer active:scale-[0.99] transition-transform">
                     {/* Header row */}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 bg-blue-800 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0">
@@ -154,6 +177,112 @@ export default function ManagerCleaners() {
         if (id === 'logs')      router.push('/manager/logs')
         if (id === 'alerts')    router.push('/manager/alerts')
       }} />
+
+      {selectedCleaner && cleanerStats && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+          <div className="absolute inset-0" onClick={() => setSelectedCleaner(null)} />
+          
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl z-10 flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-150 flex items-center justify-between bg-blue-800 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-lg font-bold">
+                  {(selectedCleaner.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-[16px] leading-tight truncate">{selectedCleaner.name}</h3>
+                  {selectedCleaner.phone && (
+                    <p className="text-xs text-white/70 mt-0.5">{selectedCleaner.phone}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCleaner(null)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center font-bold text-white hover:bg-white/20 active:scale-95 transition-transform"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Contact actions */}
+              {selectedCleaner.phone && (
+                <div className="grid grid-cols-2 gap-3">
+                  <a
+                    href={`tel:${selectedCleaner.phone.replace(/\s/g, '')}`}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-800 text-sm font-semibold rounded-2xl border border-blue-100 active:scale-[0.98] transition-all text-center"
+                  >
+                    📞 Call Cleaner
+                  </a>
+                  <a
+                    href={`sms:${selectedCleaner.phone.replace(/\s/g, '')}`}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-green-50 text-green-800 text-sm font-semibold rounded-2xl border border-green-100 active:scale-[0.98] transition-all text-center"
+                  >
+                    💬 Message (SMS)
+                  </a>
+                </div>
+              )}
+
+              {/* Stats Cards */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Performance stats</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: cleanerStats.shiftsThisWeek, label: 'Shifts', sub: 'this week' },
+                    { value: cleanerStats.hoursThisWeek,  label: 'Hours',  sub: 'this week' },
+                    { value: cleanerStats.totalCompleted, label: 'Total',  sub: 'completed' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-gray-50 border border-gray-150 rounded-2xl p-3 text-center flex flex-col justify-center">
+                      <p className="text-2xl font-bold text-blue-800 tracking-tight">{s.value}</p>
+                      <p className="text-[10px] font-bold text-gray-800 uppercase tracking-wider mt-0.5">{s.label}</p>
+                      <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wide">{s.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent History */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Recent Shifts (Last 10)</p>
+                {cleanerStats.logs.length === 0 ? (
+                  <div className="bg-gray-50 rounded-2xl p-4 text-center text-xs text-gray-400">
+                    No shift records found for this cleaner.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {cleanerStats.logs.map((log: any) => {
+                      const duration = log.signInTime && log.signOutTime 
+                        ? calcHours(log.signInTime, log.signOutTime)
+                        : 0
+                      const durationStr = duration > 0 ? `${Math.round(duration * 10) / 10} hrs` : '—'
+                      
+                      return (
+                        <div key={log.id} className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center">
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">{log.siteName || 'Unknown Site'}</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">{log.date}</p>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant={log.state === 'Complete' ? 'green' : log.state === 'Unavailable' ? 'red' : 'blue'}>
+                              {log.state}
+                            </Badge>
+                            {log.state === 'Complete' && log.signInTime && (
+                              <p className="text-[9px] text-gray-400 font-medium mt-1">
+                                {log.signInTime} - {log.signOutTime} ({durationStr})
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

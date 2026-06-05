@@ -148,9 +148,10 @@ export default function CleanerProfile() {
             { value: stats.hoursThisWeek,  label: 'Hours',  sub: 'this week' },
             { value: stats.totalCompleted, label: 'Total',  sub: 'completed' },
           ].map(s => (
-            <div key={s.label} className="bg-white border border-gray-200 rounded-2xl p-3 text-center">
-              <p className="text-2xl font-bold text-blue-800">{s.value}</p>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{s.sub}</p>
+            <div key={s.label} className="bg-white border border-gray-200 rounded-2xl p-3 text-center flex flex-col justify-center">
+              <p className="text-2xl font-bold text-blue-800 tracking-tight">{s.value}</p>
+              <p className="text-[10px] font-bold text-gray-800 uppercase tracking-wider mt-0.5">{s.label}</p>
+              <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wide">{s.sub}</p>
             </div>
           ))}
         </div>

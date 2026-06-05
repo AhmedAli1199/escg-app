@@ -4,11 +4,13 @@ import { getSession } from '@/lib/auth'
 import {
   createShiftLog,
   updateShiftLog,
+  deleteShiftLog,
   uploadAttachment,
   updateAssignmentLastTriggered,
   getSydneyDateFormatted,
   getSydneyTime,
 } from '@/lib/airtable'
+import { sendPushToManager, PUSH } from '@/lib/push'
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,6 +64,25 @@ export async function POST(req: NextRequest) {
         'Cleaner State': 'Active',
       })
       return NextResponse.json({ log })
+    }
+
+    if (action === 'cancel_sign_in') {
+      if (!shiftLogId) {
+        return NextResponse.json({ error: 'Missing shiftLogId' }, { status: 400 })
+      }
+      await deleteShiftLog(shiftLogId)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'mark_available') {
+      if (!shiftLogId) {
+        return NextResponse.json({ error: 'Missing shiftLogId' }, { status: 400 })
+      }
+      await sendPushToManager(
+        PUSH.available(session.name, body.siteName || 'Unknown site')
+      )
+      await deleteShiftLog(shiftLogId)
+      return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

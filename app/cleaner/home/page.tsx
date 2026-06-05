@@ -98,6 +98,62 @@ export default function CleanerHome() {
     }
   }
 
+  async function handleCancelSignIn(assignmentId: string) {
+    setUploading(true)
+    setError('')
+    try {
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      const currentLogId = shift?.log?.id
+      if (!currentLogId) throw new Error('No active shift log found')
+
+      const res = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_sign_in', shiftLogId: currentLogId }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to cancel sign in')
+      }
+
+      await loadShifts()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleMarkAvailable(assignmentId: string, siteName: string) {
+    setUploading(true)
+    setError('')
+    try {
+      const shift = shifts.find(s => s.assignment.id === assignmentId)
+      const currentLogId = shift?.log?.id
+      if (!currentLogId) throw new Error('No active shift log found')
+
+      const res = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_available',
+          shiftLogId: currentLogId,
+          siteName,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update availability')
+      }
+
+      await loadShifts()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function handleSignInPhoto(assignmentId: string, file: File) {
     setUploading(true)
     setError('')
@@ -298,8 +354,8 @@ export default function CleanerHome() {
                         </p>
                       )}
                     </div>
-                    <Badge variant={state === 'complete' ? 'green' : state === 'active' ? 'green' : state === 'menu_sent' ? 'amber' : 'blue'}>
-                      {state === 'menu_sent' ? 'Not started' : state === 'awaiting_photo' ? 'Sign-in photo needed' : state === 'active' ? 'Active' : state === 'collecting_photos' ? 'End photos needed' : 'Complete'}
+                    <Badge variant={state === 'complete' ? 'green' : state === 'active' ? 'green' : state === 'unavailable' ? 'red' : state === 'menu_sent' ? 'amber' : 'blue'}>
+                      {state === 'menu_sent' ? 'Not started' : state === 'awaiting_photo' ? 'Sign-in photo needed' : state === 'active' ? 'Active' : state === 'collecting_photos' ? 'End photos needed' : state === 'unavailable' ? 'Unavailable' : 'Complete'}
                     </Badge>
                   </div>
 
@@ -323,6 +379,27 @@ export default function CleanerHome() {
                         signInFileRef.current?.click()
                       }}>
                         📷 Take entrance photo
+                      </Button>
+                      <Button variant="secondary" className="h-10 text-xs border-gray-300" loading={uploading} onClick={() => handleCancelSignIn(assignment.id)}>
+                        Cancel Sign In
+                      </Button>
+                    </div>
+                  )}
+
+                  {state === 'unavailable' && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">❌</span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm text-red-900">Shift marked as Unavailable</p>
+                          {log?.cleanerNotes && (
+                            <p className="text-xs text-red-700/80 mt-0.5 italic">Reason: "{log.cleanerNotes}"</p>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-red-700/80">You've notified the manager that you can't make it to this shift.</p>
+                      <Button loading={uploading} className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleMarkAvailable(assignment.id, assignment.site)}>
+                        🔄 Mark as Available Again
                       </Button>
                     </div>
                   )}
