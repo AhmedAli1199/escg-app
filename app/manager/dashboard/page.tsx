@@ -38,32 +38,82 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
 
+  const [pushSupported, setPushSupported] = useState(false)
+  const [isSubscribed, setIsSubscribed] = useState(false)
+  const [subscribing, setSubscribing] = useState(false)
+
   useEffect(() => {
-    // Register push notifications
-    registerPush()
     loadDashboard()
     const interval = setInterval(loadDashboard, 60000) // refresh every minute
+
+    // Check push support and current subscription status
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
+      setPushSupported(true)
+      navigator.serviceWorker.ready.then(async (reg) => {
+        const sub = await reg.pushManager.getSubscription()
+        setIsSubscribed(!!sub)
+      }).catch(err => {
+        console.error('Failed to get service worker ready status:', err)
+      })
+    }
+
     return () => clearInterval(interval)
   }, [])
 
-  async function registerPush() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+  async function handleSubscribe() {
+    if (!pushSupported || subscribing) return
+    setSubscribing(true)
     try {
       const reg = await navigator.serviceWorker.register('/sw.js')
       const permission = await Notification.requestPermission()
-      if (permission !== 'granted') return
+      if (permission !== 'granted') {
+        alert('Notification permission denied. Please enable notifications in your browser/device settings.')
+        setSubscribing(false)
+        return
+      }
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
       })
-      await fetch('/api/push', {
+
+      const res = await fetch('/api/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sub),
       })
-    } catch (err) {
-      console.error('Push registration failed:', err)
+      if (!res.ok) throw new Error('Failed to save subscription')
+
+      setIsSubscribed(true)
+    } catch (err: any) {
+      console.error('Subscription failed:', err)
+      alert('Failed to enable push notifications: ' + err.message)
+    } finally {
+      setSubscribing(false)
+    }
+  }
+
+  async function handleUnsubscribe() {
+    if (!pushSupported || subscribing) return
+    setSubscribing(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await sub.unsubscribe()
+        const res = await fetch('/api/push', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        })
+        if (!res.ok) throw new Error('Failed to remove subscription')
+      }
+      setIsSubscribed(false)
+    } catch (err: any) {
+      console.error('Unsubscription failed:', err)
+      alert('Failed to disable push notifications: ' + err.message)
+    } finally {
+      setSubscribing(false)
     }
   }
 
@@ -92,7 +142,7 @@ export default function ManagerDashboard() {
     </div>
   )
 
-  const { sites = [], stats = {}, cleanerSummaries = [], todayDate = '' } = data || {}
+  const { sites = [], stats = {}, cleanerSummaries = [], todayDate = '', todayDay = '' } = data || {}
   const hasAlerts = sites.some((s: any) => s.status === 'noshow')
 
   return (
@@ -100,7 +150,7 @@ export default function ManagerDashboard() {
       <StatusBar />
       <div className="bg-blue-800 h-14 flex items-center px-4 justify-between flex-shrink-0">
         <span className="text-white font-semibold text-[17px] tracking-tight">
-          Thu {todayDate}
+          {todayDay ? `${todayDay} ` : ''}{todayDate}
         </span>
         <button onClick={() => router.push('/manager/alerts')} className="relative w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white">
           🔔
@@ -109,6 +159,45 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {pushSupported && (
+          <div className="mx-4 mt-4 p-3.5 rounded-2xl bg-white border border-gray-200 flex items-center justify-between transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className={clsx(
+                "w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-colors duration-300",
+                isSubscribed ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
+              )}>
+                {isSubscribed ? '🔔' : '🔕'}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-800">
+                  {isSubscribed ? 'Alerts Activated' : 'Manager Alerts'}
+                </p>
+                <p className="text-[10px] text-gray-500 font-medium">
+                  {isSubscribed ? 'Receiving real-time shift updates' : 'Enable mobile push notifications'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={isSubscribed ? handleUnsubscribe : handleSubscribe}
+              disabled={subscribing}
+              className={clsx(
+                "px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide shadow-sm transition-all active:scale-95 duration-250 flex items-center justify-center min-w-[76px]",
+                isSubscribed 
+                  ? "bg-gray-100 hover:bg-gray-200 text-gray-600" 
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              )}
+            >
+              {subscribing ? (
+                <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : isSubscribed ? (
+                'Disable'
+              ) : (
+                'Enable'
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-2 gap-2.5 p-4 pb-2">
           {[

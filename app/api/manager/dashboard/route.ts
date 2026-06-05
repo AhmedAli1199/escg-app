@@ -74,7 +74,7 @@ export async function GET() {
       return { ...c, todayStatus, sitesCount: todaySites.length }
     })
 
-    return NextResponse.json({ sites, stats, cleanerSummaries, todayDate: todayFmt })
+    return NextResponse.json({ sites, stats, cleanerSummaries, todayDate: todayFmt, todayDay: todayAbbr })
   } catch (err: any) {
     console.error('Dashboard error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

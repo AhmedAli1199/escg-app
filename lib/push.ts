@@ -29,6 +29,14 @@ export async function saveSubscription(userId: string, sub: any) {
   }
 }
 
+export async function removeSubscription(userId: string, endpoint: string) {
+  if (userId === 'manager') {
+    await removeManagerSubscription(endpoint)
+  } else {
+    await removeCleanerSubscription(userId, endpoint)
+  }
+}
+
 export interface PushPayload {
   title: string
   body: string
