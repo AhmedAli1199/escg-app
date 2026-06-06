@@ -207,6 +207,12 @@ export async function getAllActiveAssignmentsForDay(dayAbbr: string, alsoYesterd
   return records.map(normaliseAssignment)
 }
 
+export async function getAllActiveAssignments(): Promise<Assignment[]> {
+  const formula = '{Active} = 1'
+  const records = await fetchAllRecords(TABLES.ASSIGNMENTS, formula)
+  return records.map(normaliseAssignment)
+}
+
 export async function updateAssignmentLastTriggered(assignmentId: string, date: string) {
   return airtableFetch(`/${TABLES.ASSIGNMENTS}/${assignmentId}`, {
     method: 'PATCH',

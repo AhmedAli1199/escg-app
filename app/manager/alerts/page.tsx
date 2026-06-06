@@ -10,6 +10,7 @@ const TABS: Tab[] = [
   { id: 'cleaners',  label: 'Cleaners', icon: '👥' },
   { id: 'logs',      label: 'Logs',     icon: '📋' },
   { id: 'alerts',    label: 'Alerts',   icon: '🔔' },
+  { id: 'profile',   label: 'Profile',  icon: '👤' },
 ]
 
 export default function ManagerAlerts() {
@@ -186,6 +187,7 @@ export default function ManagerAlerts() {
         if (id === 'dashboard') router.push('/manager/dashboard')
         if (id === 'cleaners')  router.push('/manager/cleaners')
         if (id === 'logs')      router.push('/manager/logs')
+        if (id === 'profile')   router.push('/manager/profile')
       }} />
     </div>
   )

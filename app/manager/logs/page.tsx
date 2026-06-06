@@ -10,6 +10,7 @@ const TABS: Tab[] = [
   { id: 'cleaners',  label: 'Cleaners', icon: '👥' },
   { id: 'logs',      label: 'Logs',     icon: '📋' },
   { id: 'alerts',    label: 'Alerts',   icon: '🔔' },
+  { id: 'profile',   label: 'Profile',  icon: '👤' },
 ]
 
 const PAGE_SIZE = 20
@@ -319,6 +320,7 @@ export default function ManagerLogs() {
         if (id === 'dashboard') router.push('/manager/dashboard')
         if (id === 'cleaners')  router.push('/manager/cleaners')
         if (id === 'alerts')    router.push('/manager/alerts')
+        if (id === 'profile')   router.push('/manager/profile')
       }} />
     </div>
   )

@@ -10,6 +10,7 @@ const TABS: Tab[] = [
   { id: 'cleaners',  label: 'Cleaners', icon: '👥' },
   { id: 'logs',      label: 'Logs',     icon: '📋' },
   { id: 'alerts',    label: 'Alerts',   icon: '🔔' },
+  { id: 'profile',   label: 'Profile',  icon: '👤' },
 ]
 
 const TODAY_STATUS: Record<string, { variant: 'blue' | 'green' | 'red' | 'amber' | 'gray'; label: string }> = {
@@ -176,6 +177,7 @@ export default function ManagerCleaners() {
         if (id === 'dashboard') router.push('/manager/dashboard')
         if (id === 'logs')      router.push('/manager/logs')
         if (id === 'alerts')    router.push('/manager/alerts')
+        if (id === 'profile')   router.push('/manager/profile')
       }} />
 
       {selectedCleaner && cleanerStats && (

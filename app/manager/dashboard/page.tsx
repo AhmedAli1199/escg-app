@@ -11,6 +11,7 @@ const TABS: Tab[] = [
   { id: 'cleaners',  label: 'Cleaners', icon: '👥' },
   { id: 'logs',      label: 'Logs',     icon: '📋' },
   { id: 'alerts',    label: 'Alerts',   icon: '🔔' },
+  { id: 'profile',   label: 'Profile',  icon: '👤' },
 ]
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,6 +38,7 @@ export default function ManagerDashboard() {
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
+  const [viewMode, setViewMode] = useState<'today' | 'roster'>('today')
 
   const [pushSupported, setPushSupported] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
@@ -142,7 +144,7 @@ export default function ManagerDashboard() {
     </div>
   )
 
-  const { sites = [], stats = {}, cleanerSummaries = [], todayDate = '', todayDay = '' } = data || {}
+  const { sites = [], stats = {}, cleanerSummaries = [], todayDate = '', todayDay = '', roster = [] } = data || {}
   const hasAlerts = sites.some((s: any) => s.status === 'noshow')
 
   return (
@@ -156,6 +158,30 @@ export default function ManagerDashboard() {
           🔔
           {hasAlerts && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
         </button>
+      </div>
+
+      {/* View Mode Toggle */}
+      <div className="bg-blue-800 px-4 pb-3 flex justify-center flex-shrink-0">
+        <div className="bg-blue-900/40 p-0.5 rounded-xl flex w-full">
+          <button
+            onClick={() => setViewMode('today')}
+            className={clsx(
+              "flex-1 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200",
+              viewMode === 'today' ? "bg-white text-blue-900 shadow-sm" : "text-white/70 hover:text-white"
+            )}
+          >
+            Today's Overview
+          </button>
+          <button
+            onClick={() => setViewMode('roster')}
+            className={clsx(
+              "flex-1 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200",
+              viewMode === 'roster' ? "bg-white text-blue-900 shadow-sm" : "text-white/70 hover:text-white"
+            )}
+          >
+            Weekly Roster
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -198,55 +224,92 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2.5 p-4 pb-2">
-          {[
-            { label: 'Scheduled', value: (stats.scheduled ?? 0) - (stats.complete ?? 0), color: 'text-gray-900' },
-            { label: 'Complete',  value: stats.complete,  color: 'text-green-600' },
-            { label: 'Active',    value: stats.active,    color: 'text-blue-600'  },
-            { label: 'No show',   value: stats.noShow,    color: 'text-red-600'   },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-gray-200 p-3.5">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{s.label}</p>
-              <p className={`text-3xl font-bold tracking-tight ${s.color}`}>{s.value ?? '—'}</p>
+        {viewMode === 'roster' ? (
+          <div className="p-4 space-y-4">
+            {roster.map((dayData: any) => (
+              <div key={dayData.date} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-3">
+                  <span className="font-bold text-gray-900 text-sm">{dayData.day}</span>
+                  <span className="text-xs text-gray-400 font-semibold">{dayData.date}</span>
+                </div>
+                {dayData.shifts.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-1 italic">No shifts scheduled for this day</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {dayData.shifts.map((shift: any) => (
+                      <div key={shift.id} className="flex justify-between items-center py-1.5 border-b border-gray-50 last:border-b-0">
+                        <div className="min-w-0 flex-1 pr-3">
+                          <p className="text-xs font-bold text-gray-800 truncate">{shift.site}</p>
+                          {shift.windowStart && (
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                              🕐 {shift.isWeekendShift ? 'Weekend — flexible' : `${shift.windowStart}${shift.windowEnd ? ` – ${shift.windowEnd}` : ''}`}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant="blue">
+                          {shift.cleaner}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-2.5 p-4 pb-2">
+              {[
+                { label: 'Scheduled', value: (stats.scheduled ?? 0) - (stats.complete ?? 0), color: 'text-gray-900' },
+                { label: 'Complete',  value: stats.complete,  color: 'text-green-600' },
+                { label: 'Active',    value: stats.active,    color: 'text-blue-600'  },
+                { label: 'No show',   value: stats.noShow,    color: 'text-red-600'   },
+              ].map(s => (
+                <div key={s.label} className="bg-white rounded-2xl border border-gray-200 p-3.5">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{s.label}</p>
+                  <p className={`text-3xl font-bold tracking-tight ${s.color}`}>{s.value ?? '—'}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <p className="px-4 pt-2 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">All sites today</p>
+            <p className="px-4 pt-2 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">All sites today</p>
 
-        {/* Site grid */}
-        <div className="grid grid-cols-2 gap-2 px-4 pb-4">
-          {sites.map((s: any) => (
-            <div key={s.assignmentId} className="bg-white rounded-2xl border border-gray-200 p-3">
-              <p className="text-xs font-semibold text-gray-900 leading-tight mb-1">{s.site}</p>
-              <p className="text-[11px] text-gray-400 mb-2">{s.cleaner}</p>
-              <div className={`h-1 rounded-full ${STATUS_COLORS[s.status] || 'bg-gray-200'}`} />
-              {s.signInTime && (
-                <p className="text-[10px] text-gray-400 mt-1.5">
-                  In {s.signInTime}{s.signOutTime ? ` · Out ${s.signOutTime}` : ''}
-                </p>
-              )}
+            {/* Site grid */}
+            <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+              {sites.map((s: any) => (
+                <div key={s.assignmentId} className="bg-white rounded-2xl border border-gray-200 p-3">
+                  <p className="text-xs font-semibold text-gray-900 leading-tight mb-1">{s.site}</p>
+                  <p className="text-[11px] text-gray-400 mb-2">{s.cleaner}</p>
+                  <div className={`h-1 rounded-full ${STATUS_COLORS[s.status] || 'bg-gray-200'}`} />
+                  {s.signInTime && (
+                    <p className="text-[10px] text-gray-400 mt-1.5">
+                      In {s.signInTime}{s.signOutTime ? ` · Out ${s.signOutTime}` : ''}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Legend */}
-        <div className="px-4 pb-4 flex flex-wrap gap-3">
-          {Object.entries(STATUS_LABEL).map(([key, label]) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <div className={`w-2.5 h-2.5 rounded-sm ${STATUS_COLORS[key]}`} />
-              <span className="text-[11px] text-gray-500 font-medium">{label}</span>
+            {/* Legend */}
+            <div className="px-4 pb-4 flex flex-wrap gap-3">
+              {Object.entries(STATUS_LABEL).map(([key, label]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <div className={`w-2.5 h-2.5 rounded-sm ${STATUS_COLORS[key]}`} />
+                  <span className="text-[11px] text-gray-500 font-medium">{label}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
 
       <TabBar tabs={TABS} active="dashboard" badge={hasAlerts ? 'alerts' : undefined}
         onChange={id => {
-          if (id === 'logs')    router.push('/manager/logs')
-          if (id === 'alerts')  router.push('/manager/alerts')
+          if (id === 'logs')     router.push('/manager/logs')
+          if (id === 'alerts')   router.push('/manager/alerts')
           if (id === 'cleaners') router.push('/manager/cleaners')
+          if (id === 'profile')  router.push('/manager/profile')
         }}
       />
     </div>

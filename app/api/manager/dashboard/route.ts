@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import {
   getAllActiveAssignmentsForDay,
+  getAllActiveAssignments,
   getAllShiftLogsForDate,
   getAllCleaners,
   filterByFrequency,
@@ -20,10 +21,11 @@ export async function GET() {
     const todayAbbr = getSydneyDayAbbr()
     const todayFmt  = getSydneyDateFormatted()
 
-    const [assignments, shiftLogs, cleaners] = await Promise.all([
+    const [assignments, shiftLogs, cleaners, allActiveAssignments] = await Promise.all([
       getAllActiveAssignmentsForDay(todayAbbr),
       getAllShiftLogsForDate(todayFmt),
       getAllCleaners(),
+      getAllActiveAssignments(),
     ])
 
     const todayAssignments = filterByFrequency(assignments, new Date())
@@ -74,7 +76,34 @@ export async function GET() {
       return { ...c, todayStatus, sitesCount: todaySites.length }
     })
 
-    return NextResponse.json({ sites, stats, cleanerSummaries, todayDate: todayFmt, todayDay: todayAbbr })
+    // Weekly roster (upcoming 7 days)
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() + i)
+      const dayAbbr = days[d.getDay()]
+      const dateStr = d.toLocaleDateString('en-GB').split('/').join('/')
+      return { d, dayAbbr, dateStr }
+    })
+
+    const roster = upcomingDays.map(({ d, dayAbbr, dateStr }) => {
+      const dayAssigns = allActiveAssignments.filter(a => a.days.includes(dayAbbr))
+      const validAssigns = filterByFrequency(dayAssigns, d)
+      return {
+        date: dateStr,
+        day: dayAbbr,
+        shifts: validAssigns.map(a => ({
+          id: a.id,
+          site: a.site,
+          cleaner: a.cleaner || 'Unassigned',
+          windowStart: a.windowStart,
+          windowEnd: a.windowEnd,
+          isWeekendShift: a.isWeekendShift,
+        }))
+      }
+    })
+
+    return NextResponse.json({ sites, stats, cleanerSummaries, todayDate: todayFmt, todayDay: todayAbbr, roster })
   } catch (err: any) {
     console.error('Dashboard error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
