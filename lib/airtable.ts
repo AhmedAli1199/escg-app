@@ -183,7 +183,7 @@ function normaliseAssignment(rec: any): Assignment {
     windowEnd:      f['Window End'] || null,
     isWeekendShift: f['Weekend Shift'] === true,
     active:         f.Active === true,
-    lastTriggered:  f.LastTriggeredDate || null,
+    lastTriggered:  f.LastTriggeredDate || f['Last Triggered Date'] || null,
   }
 }
 
@@ -221,18 +221,41 @@ export async function updateAssignmentLastTriggered(assignmentId: string, date: 
 }
 
 // ─── FREQUENCY FILTER ─────────────────────────────────────────
+function getSydneyMidnightUtc(dateInput: Date | string): number {
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+    if (isNaN(d.getTime())) return 0
+    const ymd = d.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+    const [year, month, day] = ymd.split('-').map(Number)
+    return Date.UTC(year, month - 1, day)
+  } catch {
+    return 0
+  }
+}
+
 export function filterByFrequency(assignments: Assignment[], targetDate: Date): Assignment[] {
-  const dayOfMonth = targetDate.getDate()
+  const targetMidnight = getSydneyMidnightUtc(targetDate)
 
   return assignments.filter(a => {
     const freq = a.frequency
     if (freq === 'Weekly') return true
+
     if (freq === 'Fortnightly') {
       if (!a.lastTriggered) return true
-      const diff = Math.floor((targetDate.getTime() - new Date(a.lastTriggered).getTime()) / 86400000)
-      return diff >= 13
+      const lastMidnight = getSydneyMidnightUtc(a.lastTriggered)
+      if (!lastMidnight) return true
+      const diffInDays = Math.round((targetMidnight - lastMidnight) / 86400000)
+      return diffInDays >= 13
     }
-    if (freq === 'Monthly') return dayOfMonth <= 7
+
+    if (freq === 'Monthly') {
+      if (!a.lastTriggered) return true
+      const lastMidnight = getSydneyMidnightUtc(a.lastTriggered)
+      if (!lastMidnight) return true
+      const diffInDays = Math.round((targetMidnight - lastMidnight) / 86400000)
+      return diffInDays >= 27
+    }
+
     if (freq === 'Adhoc') return false
     return true
   })
