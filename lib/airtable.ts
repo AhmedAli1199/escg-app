@@ -257,7 +257,7 @@ export function filterByFrequency(assignments: Assignment[], targetDate: Date): 
       const diffInDays = Math.round((targetMidnight - lastMidnight) / 86400000)
       if (diffInDays < 25) return false
 
-      // Match the N-th occurrence of the weekday in the month (e.g., 4th Friday of May -> 4th Friday of August)
+      // Match the exact N-th occurrence of the weekday in the month (e.g., 4th Friday of May -> 4th Friday of August)
       const lastD = typeof a.lastTriggered === 'string' ? new Date(a.lastTriggered) : a.lastTriggered
       const lastYmd = lastD.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
       const lastDay = parseInt(lastYmd.split('-')[2], 10)
@@ -267,7 +267,7 @@ export function filterByFrequency(assignments: Assignment[], targetDate: Date): 
       const targetDay = parseInt(targetYmd.split('-')[2], 10)
       const targetNth = Math.floor((targetDay - 1) / 7)
 
-      return targetNth === lastNth || (lastNth >= 3 && targetNth >= 3)
+      return targetNth === lastNth
     }
 
     if (freq === 'Adhoc') return false

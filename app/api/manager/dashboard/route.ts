@@ -76,14 +76,16 @@ export async function GET() {
       return { ...c, todayStatus, sitesCount: todaySites.length }
     })
 
-    // 4-Week roster (upcoming 28 days)
+    // 4-Week roster (upcoming 28 days) in Sydney timezone
     const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
     const upcomingDays = Array.from({ length: 28 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() + i)
-      const dayAbbr = days[d.getDay()]
-      const dateStr = d.toLocaleDateString('en-GB').split('/').join('/')
-      return { d, dayAbbr, dateStr }
+      const now = new Date()
+      const ymd = now.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+      const [y, m, dNum] = ymd.split('-').map(Number)
+      const dateObj = new Date(Date.UTC(y, m - 1, dNum + i, 12, 0, 0))
+      const dayAbbr = days[dateObj.getUTCDay()]
+      const dateStr = dateObj.toLocaleDateString('en-GB', { timeZone: 'Australia/Sydney' }).split('/').join('/')
+      return { d: dateObj, dayAbbr, dateStr }
     })
 
     const roster = upcomingDays.map(({ d, dayAbbr, dateStr }) => {
