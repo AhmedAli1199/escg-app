@@ -99,8 +99,8 @@ export async function GET() {
     )
     const completedLogs = shiftLogs.filter(l => l.state === 'Complete')
 
-    // Upcoming 7 days schedule
-    const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    // Upcoming 28 days (4 weeks) schedule
+    const upcomingDays = Array.from({ length: 28 }, (_, i) => {
       const d = new Date()
       d.setDate(d.getDate() + i)
       const dayAbbr = days[d.getDay()]

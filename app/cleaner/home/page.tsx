@@ -518,7 +518,7 @@ function SummaryRow({ label, value, highlight }: { label: string; value: string;
 
 function ActionGrid({ router }: { router: any }) {
   const actions = [
-    { icon: '📅', label: 'My schedule', sub: 'Next 7 days', href: '/cleaner/schedule' },
+    { icon: '📅', label: 'My schedule', sub: 'Next 4 weeks', href: '/cleaner/schedule' },
     { icon: '⚠️', label: 'Report issue', sub: 'Log a problem', href: '/cleaner/report' },
     { icon: '🕐', label: 'Shift history', sub: 'Past records',  href: '/cleaner/history' },
     { icon: '👤', label: 'My profile',   sub: 'Stats & info',  href: '/cleaner/profile' },

@@ -76,9 +76,9 @@ export async function GET() {
       return { ...c, todayStatus, sitesCount: todaySites.length }
     })
 
-    // Weekly roster (upcoming 7 days)
+    // 4-Week roster (upcoming 28 days)
     const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-    const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    const upcomingDays = Array.from({ length: 28 }, (_, i) => {
       const d = new Date()
       d.setDate(d.getDate() + i)
       const dayAbbr = days[d.getDay()]

@@ -33,6 +33,7 @@ function calcHours(signIn: string, signOut: string): number {
 export default function ManagerCleaners() {
   const router = useRouter()
   const [cleanerSummaries, setCleanerSummaries] = useState<any[]>([])
+  const [roster, setRoster] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCleaner, setSelectedCleaner] = useState<any | null>(null)
@@ -49,6 +50,7 @@ export default function ManagerCleaners() {
 
       const dashData = await dashRes.json()
       setCleanerSummaries(dashData.cleanerSummaries || [])
+      setRoster(dashData.roster || [])
 
       const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }
       setLogs(logsData.logs || [])
@@ -108,6 +110,28 @@ export default function ManagerCleaners() {
       logs: cleanerLogs.slice(0, 10), // last 10 logs for history
     }
   }, [selectedCleaner, logs, weekMonday])
+
+  const cleanerUpcomingShifts = useMemo(() => {
+    if (!selectedCleaner || !roster) return []
+    const list: any[] = []
+    for (const dayItem of roster) {
+      if (dayItem.shifts && Array.isArray(dayItem.shifts)) {
+        for (const s of dayItem.shifts) {
+          if (s.cleaner === selectedCleaner.name) {
+            list.push({
+              date: dayItem.date,
+              day: dayItem.day,
+              site: s.site,
+              windowStart: s.windowStart,
+              windowEnd: s.windowEnd,
+              isWeekendShift: s.isWeekendShift,
+            })
+          }
+        }
+      }
+    }
+    return list
+  }, [selectedCleaner, roster])
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -242,6 +266,39 @@ export default function ManagerCleaners() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Upcoming 4-Week Schedule */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Upcoming 4-Week Schedule</p>
+                  <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                    {cleanerUpcomingShifts.length} shift{cleanerUpcomingShifts.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {cleanerUpcomingShifts.length === 0 ? (
+                  <div className="bg-gray-50 rounded-2xl p-4 text-center text-xs text-gray-400">
+                    No upcoming shifts scheduled for the next 4 weeks.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {cleanerUpcomingShifts.map((shift: any, idx: number) => (
+                      <div key={idx} className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-bold text-gray-900">{shift.site}</p>
+                          <p className="text-[10px] text-blue-700 font-medium mt-0.5">
+                            📅 {shift.day}, {shift.date}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-semibold text-gray-600 bg-white px-2 py-1 rounded-md border border-gray-200">
+                            {shift.windowStart && shift.windowEnd ? `${shift.windowStart} – ${shift.windowEnd}` : shift.isWeekendShift ? 'Weekend' : 'Scheduled'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Recent History */}

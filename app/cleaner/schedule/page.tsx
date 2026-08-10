@@ -94,7 +94,7 @@ export default function CleanerSchedule() {
           <div className="mx-4 mt-4 bg-white rounded-2xl border border-gray-200 p-6 text-center">
             <p className="text-3xl mb-3">📅</p>
             <p className="font-semibold text-gray-900">No upcoming shifts</p>
-            <p className="text-sm text-gray-500 mt-1">Your schedule is clear for the next 7 days</p>
+            <p className="text-sm text-gray-500 mt-1">Your schedule is clear for the next 4 weeks</p>
           </div>
         )}
 
