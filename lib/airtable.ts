@@ -245,7 +245,9 @@ export function filterByFrequency(assignments: Assignment[], targetDate: Date): 
       const lastMidnight = getSydneyMidnightUtc(a.lastTriggered)
       if (!lastMidnight) return true
       const diffInDays = Math.round((targetMidnight - lastMidnight) / 86400000)
-      return diffInDays >= 13
+      if (diffInDays < 0) return false
+      const rem = diffInDays % 14
+      return rem <= 1 || rem >= 13
     }
 
     if (freq === 'Monthly') {
@@ -253,7 +255,19 @@ export function filterByFrequency(assignments: Assignment[], targetDate: Date): 
       const lastMidnight = getSydneyMidnightUtc(a.lastTriggered)
       if (!lastMidnight) return true
       const diffInDays = Math.round((targetMidnight - lastMidnight) / 86400000)
-      return diffInDays >= 27
+      if (diffInDays < 25) return false
+
+      // Match the N-th occurrence of the weekday in the month (e.g., 4th Friday of May -> 4th Friday of August)
+      const lastD = typeof a.lastTriggered === 'string' ? new Date(a.lastTriggered) : a.lastTriggered
+      const lastYmd = lastD.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+      const lastDay = parseInt(lastYmd.split('-')[2], 10)
+      const lastNth = Math.floor((lastDay - 1) / 7)
+
+      const targetYmd = targetDate.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+      const targetDay = parseInt(targetYmd.split('-')[2], 10)
+      const targetNth = Math.floor((targetDay - 1) / 7)
+
+      return targetNth === lastNth || (lastNth >= 3 && targetNth >= 3)
     }
 
     if (freq === 'Adhoc') return false
